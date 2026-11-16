@@ -3,12 +3,13 @@ package tui
 
 import (
 	"context"
-	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/tdragon/argus/internal/model"
 	"github.com/tdragon/argus/internal/poller"
 )
 
@@ -80,6 +81,12 @@ type Options struct {
 	Notifier Notifier
 	Styles   Styles
 	Keys     KeyMap
+	// Me is the login of the user. It drives the derived PR status.
+	Me string
+	// BotLogins are the logins that the bot filter counts as bots.
+	BotLogins []string
+	// Now gives the time for the PR age. It is time.Now when nil.
+	Now func() time.Time
 }
 
 // Model is the root Bubble Tea model: two panes, the status bar, the help
@@ -97,6 +104,7 @@ type Model struct {
 	dialogs       []Dialog
 	status        StatusBar
 	snapshot      *poller.Snapshot
+	list          listPane
 
 	// notifying is true while a Notifier.Process call runs. The calls run
 	// one at a time and in order. pendingNotify is the newest snapshot that
@@ -115,7 +123,7 @@ func New(opts Options) *Model {
 	if keys.Quit.Keys == nil {
 		keys = DefaultKeyMap()
 	}
-	return &Model{
+	m := &Model{
 		ctx:      ctx,
 		poller:   opts.Poller,
 		notifier: opts.Notifier,
@@ -123,7 +131,29 @@ func New(opts Options) *Model {
 		keys:     keys,
 		width:    80,
 		height:   24,
+		list:     newListPane(opts.Me, opts.BotLogins, opts.Now),
 	}
+	m.resize()
+	return m
+}
+
+// Selected returns the PR under the list cursor, or false if the cursor is
+// not on a PR.
+func (m *Model) Selected() (model.PR, bool) { return m.list.Selected() }
+
+// Filters returns the list filters.
+func (m *Model) Filters() Filters { return m.list.filters }
+
+// layout returns the width of the list pane and the height of the panes.
+// Both include the pane border.
+func (m *Model) layout() (listWidth, mainHeight int) {
+	return max(m.width*2/5, 20), max(m.height-1, 3)
+}
+
+// resize gives the list pane its height inside the border.
+func (m *Model) resize() {
+	_, h := m.layout()
+	m.list.setHeight(h - 2)
 }
 
 // Focus returns the focused pane.
@@ -154,6 +184,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m.resize()
 	case tea.KeyPressMsg:
 		return m, m.handleKey(msg)
 	case PushDialogMsg:
@@ -168,6 +199,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleNotifyDone(msg.err)
 	case clearMessageMsg:
 		m.status.clearMessage(msg.id)
+	case authorFilterMsg:
+		m.list.filters.Author = msg.login
+		m.filtersChanged()
 	}
 	return m, nil
 }
@@ -182,6 +216,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 
 	k := m.keys
+	// The search input gets every key but ctrl+c, so that q types a q.
+	if len(m.dialogs) == 0 && !m.help && m.focus == FocusList && m.list.searching && !k.ForceQuit.Matches(msg) {
+		return m.handleSearchInput(msg)
+	}
 	switch {
 	case k.Quit.Matches(msg), k.ForceQuit.Matches(msg):
 		return m.requestQuit()
@@ -211,6 +249,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.focus = FocusList
 	case k.FocusDetail.Matches(msg):
 		m.focus = FocusDetail
+	case m.help:
+	case m.focus == FocusList:
+		return m.handleListKey(msg)
 	}
 	return nil
 }
@@ -249,6 +290,7 @@ func (m *Model) handlePoller(u poller.Update) tea.Cmd {
 		return tea.Batch(cmds...)
 	}
 	m.snapshot = u.Snapshot
+	m.list.setSnapshot(u.Snapshot)
 	m.status.Err = nil
 	m.status.LastRefresh = u.Snapshot.RefreshedAt
 	m.status.PausedUntil = u.Snapshot.PausedUntil
@@ -311,9 +353,9 @@ func (m *Model) View() tea.View {
 }
 
 func (m *Model) panes(height int) string {
-	listWidth := max(m.width*2/5, 20)
+	listWidth, _ := m.layout()
 	detailWidth := max(m.width-listWidth, 20)
-	list := m.pane(FocusList, listWidth, height, m.listView())
+	list := m.pane(FocusList, listWidth, height, m.list.view(listWidth-2, m.styles, m.focus == FocusList))
 	detail := m.pane(FocusDetail, detailWidth, height, m.styles.Muted.Render("No PR selected."))
 	return lipgloss.JoinHorizontal(lipgloss.Top, list, detail)
 }
@@ -324,18 +366,6 @@ func (m *Model) pane(f Focus, width, height int, content string) string {
 		style = m.styles.PaneBorderFocused
 	}
 	return style.Width(width).Height(height).MaxHeight(height).Render(content)
-}
-
-// listView is a placeholder of the list pane: one line for each section.
-func (m *Model) listView() string {
-	if m.snapshot == nil {
-		return m.styles.Muted.Render("Loading pull requests…")
-	}
-	lines := make([]string, 0, len(m.snapshot.Sections))
-	for _, s := range m.snapshot.Sections {
-		lines = append(lines, fmt.Sprintf("%s (%d)", m.styles.Title.Render(s.Scope.String()), len(s.PRs)))
-	}
-	return strings.Join(lines, "\n")
 }
 
 // helpView renders the help sections for the focused pane. It puts the

@@ -94,6 +94,12 @@ func key(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	case "ctrl+r":
 		return tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}
+	case "ctrl+d":
+		return tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl}
+	case "ctrl+u":
+		return tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl}
+	case "backspace":
+		return tea.KeyPressMsg{Code: tea.KeyBackspace}
 	}
 	r := []rune(s)[0]
 	return tea.KeyPressMsg{Code: r, Text: s}
@@ -282,7 +288,7 @@ func TestPollerSnapshotRunsNotifier(t *testing.T) {
 	case <-time.After(waitTimeout):
 		t.Fatal("notifier was not called")
 	}
-	waitForText(t, tm, "refreshed 14:05", "my PRs")
+	waitForText(t, tm, "refreshed 14:05", "My PRs")
 
 	p.ch <- poller.Update{Err: errors.New("search: HTTP 502")}
 	waitForText(t, tm, "refresh failed: search: HTTP 502")

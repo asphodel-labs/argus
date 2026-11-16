@@ -72,7 +72,9 @@ func run() error {
 		SeenPath: filepath.Join(stateDir, notify.SeenFile),
 		Me:       cfg.User,
 	}
-	m := tui.New(tui.Options{Context: ctx, Poller: p, Notifier: notifier, Styles: styles})
+	m := tui.New(tui.Options{Context: ctx, Poller: p, Notifier: notifier, Styles: styles,
+		Me: cfg.User, BotLogins: cfg.BotLogins,
+	})
 	_, err = tea.NewProgram(m).Run()
 	cancel()
 	<-done
