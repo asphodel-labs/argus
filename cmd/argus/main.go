@@ -6,9 +6,17 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/cli/go-gh/v2/pkg/api"
 
 	"github.com/tdragon/argus/internal/config"
 	"github.com/tdragon/argus/internal/execx"
+	"github.com/tdragon/argus/internal/gh"
+	"github.com/tdragon/argus/internal/notify"
+	"github.com/tdragon/argus/internal/poller"
+	"github.com/tdragon/argus/internal/tui"
 )
 
 func main() {
@@ -33,7 +41,49 @@ func run() error {
 	if err := config.ResolveUser(context.Background(), cfg, execx.Exec{}); err != nil {
 		return err
 	}
-	// The TUI replaces this output in task 8.
-	fmt.Printf("argus: user %s, %d orgs, refresh every %s\n", cfg.User, len(cfg.Orgs), cfg.RefreshInterval)
-	return nil
+	styles, err := tui.NewStyles(cfg.Colors)
+	if err != nil {
+		return fmt.Errorf("config %s: %w", *configPath, err)
+	}
+	stateDir, err := stateDir()
+	if err != nil {
+		return err
+	}
+	client, err := gh.New(api.ClientOptions{})
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	p := poller.New(client, poller.Options{
+		User:            cfg.User,
+		Orgs:            cfg.Orgs,
+		RefreshInterval: cfg.RefreshInterval,
+		MinRefreshGap:   cfg.MinRefreshGap,
+	})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = p.Run(ctx) // Run returns only the context error.
+	}()
+	notifier := &notify.Notifier{
+		Runner:   execx.Exec{},
+		SeenPath: filepath.Join(stateDir, notify.SeenFile),
+		Me:       cfg.User,
+	}
+	m := tui.New(tui.Options{Context: ctx, Poller: p, Notifier: notifier, Styles: styles})
+	_, err = tea.NewProgram(m).Run()
+	cancel()
+	<-done
+	return err
+}
+
+// stateDir returns ~/.local/state/argus.
+func stateDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("find home directory: %w", err)
+	}
+	return filepath.Join(home, ".local", "state", "argus"), nil
 }
