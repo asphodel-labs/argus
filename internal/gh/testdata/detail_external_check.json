@@ -1,0 +1,57 @@
+{
+  "data": {
+    "repository": {
+      "mergeCommitAllowed": true,
+      "squashMergeAllowed": true,
+      "rebaseMergeAllowed": false,
+      "deleteBranchOnMerge": false,
+      "pullRequest": {
+        "id": "PR_external",
+        "number": 9,
+        "title": "Bump deps",
+        "url": "https://github.com/acme/web/pull/9",
+        "body": "Bump.",
+        "isDraft": false,
+        "mergeable": "UNKNOWN",
+        "mergeStateStatus": "UNSTABLE",
+        "reviewDecision": "REVIEW_REQUIRED",
+        "createdAt": "2026-11-14T08:00:00Z",
+        "updatedAt": "2026-11-14T09:00:00Z",
+        "headRefOid": "cccccccccccccccccccccccccccccccccccccccc",
+        "baseRefName": "develop",
+        "repository": {"name": "web", "owner": {"login": "acme"}},
+        "author": {"__typename": "Bot", "login": "renovate"},
+        "commits": {"nodes": [{"commit": {"statusCheckRollup": {
+          "state": "PENDING",
+          "contexts": {"nodes": [
+            {
+              "__typename": "CheckRun",
+              "name": "ci/circleci: build",
+              "status": "COMPLETED",
+              "conclusion": "SUCCESS",
+              "detailsUrl": "https://circleci.com/gh/acme/web/77",
+              "checkSuite": {"app": {"slug": "circleci-checks"}, "workflowRun": null}
+            },
+            {
+              "__typename": "StatusContext",
+              "context": "ci/jenkins",
+              "state": "PENDING",
+              "targetUrl": "https://jenkins.example.com/job/web/12",
+              "creator": {"login": "jenkins-bot"}
+            },
+            {
+              "__typename": "StatusContext",
+              "context": "deploy/preview",
+              "state": "ERROR",
+              "targetUrl": null,
+              "creator": null
+            }
+          ]}
+        }}}]},
+        "reviews": {"totalCount": 0, "nodes": []},
+        "reviewThreads": {"totalCount": 0, "nodes": []},
+        "comments": {"totalCount": 0, "nodes": []}
+      }
+    }
+  }
+}

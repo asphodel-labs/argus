@@ -51,6 +51,20 @@ const (
 	MergeableConflicting Mergeable = "CONFLICTING"
 )
 
+// MergeStateStatus is the merge state of a PR from the GitHub
+// MergeStateStatus enum, for example CLEAN, BLOCKED, or BEHIND.
+type MergeStateStatus string
+
+// MergeMethod is a merge method from the GitHub PullRequestMergeMethod enum.
+type MergeMethod string
+
+// Merge methods.
+const (
+	MergeMethodMerge  MergeMethod = "MERGE"
+	MergeMethodSquash MergeMethod = "SQUASH"
+	MergeMethodRebase MergeMethod = "REBASE"
+)
+
 // Repo identifies a repository.
 type Repo struct {
 	Owner string
@@ -63,7 +77,8 @@ func (r Repo) FullName() string {
 }
 
 // PR is a pull request. A search fills the summary fields.
-// The detail query also fills Body, Checks, Reviews, and Comments.
+// The detail query also fills Body, Checks, Reviews, Comments, and the
+// merge fields.
 type PR struct {
 	ID             string
 	Repo           Repo
@@ -95,17 +110,30 @@ type PR struct {
 	Checks   []Check
 	Reviews  []Review
 	Comments []Comment
+
+	// MergeStateStatus, MergeMethods, and DeleteBranchOnMerge come from the
+	// detail query. MergeMethods holds the methods that the repository allows.
+	MergeStateStatus    MergeStateStatus
+	MergeMethods        []MergeMethod
+	DeleteBranchOnMerge bool
 }
 
 // Check is one check run or status context on the head commit.
+// Status holds a CheckStatusState value, for example COMPLETED. Conclusion
+// holds a CheckConclusionState value after the check completes. A status
+// context maps to PENDING, or to COMPLETED with its state as Conclusion.
 type Check struct {
 	Name       string
 	Status     string
 	Conclusion string
-	App        string
-	URL        string
+	// App is the app slug of a check run, or the creator login of a status
+	// context.
+	App string
+	URL string
 	// WorkflowRunID is the GitHub Actions run id. It is 0 for other checks.
 	WorkflowRunID int64
+	// Rerunnable is true only for a check run of GitHub Actions.
+	Rerunnable bool
 }
 
 // Review is a submitted or pending review.
