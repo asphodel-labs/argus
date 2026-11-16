@@ -44,10 +44,21 @@ type detailEntry struct {
 // detailItem is one foldable block of the conversation: a review thread, a
 // PR comment, or a review with a body.
 type detailItem struct {
-	key string
+	key  string
+	kind itemKind
 	// line is the index of the header line in the content lines.
 	line int
 }
+
+// itemKind is the kind of a detail item.
+type itemKind int
+
+// The kinds of detail items.
+const (
+	itemThread itemKind = iota
+	itemComment
+	itemReview
+)
 
 // detailPane is the state of the detail pane: the cache, the selected PR,
 // the scroll position, the current item, and the folds.
@@ -182,6 +193,12 @@ func (m *Model) syncDetail() tea.Cmd {
 	if m.detailer == nil || !d.needsFetch(changed) {
 		return nil
 	}
+	return m.fetchDetail(pr)
+}
+
+// fetchDetail starts a PRDetail call for pr.
+func (m *Model) fetchDetail(pr model.PR) tea.Cmd {
+	d := &m.detail
 	id := pr.ID
 	d.loading[id] = true
 	d.fetchedFor[id] = pr.UpdatedAt
@@ -410,7 +427,7 @@ func (b *detailBuilder) build(pr model.PR) {
 		if t.IsResolved {
 			extra = "resolved · " + extra
 		}
-		b.item(t.ID, t.IsResolved, head+" "+st.Muted.Render(extra), func() {
+		b.item(t.ID, itemThread, t.IsResolved, head+" "+st.Muted.Render(extra), func() {
 			for _, c := range t.Comments {
 				b.comment(c.Author.Login, c.CreatedAt, c.Body, c.Reactions)
 			}
@@ -421,7 +438,7 @@ func (b *detailBuilder) build(pr model.PR) {
 
 // item adds a foldable block: the header line and, if the block is open,
 // the content from body.
-func (b *detailBuilder) item(key string, defFold bool, head string, body func()) {
+func (b *detailBuilder) item(key string, kind itemKind, defFold bool, head string, body func()) {
 	st := b.d.styles
 	folded := b.d.isFolded(key, defFold)
 	arrow := "▾"
@@ -432,7 +449,7 @@ func (b *detailBuilder) item(key string, defFold bool, head string, body func())
 	if len(b.items) == b.d.cur {
 		marker = st.Title.Render("›")
 	}
-	b.items = append(b.items, detailItem{key: key, line: len(b.lines)})
+	b.items = append(b.items, detailItem{key: key, kind: kind, line: len(b.lines)})
 	b.add(marker + arrow + " " + head)
 	if !folded {
 		body()
@@ -471,18 +488,19 @@ func (b *detailBuilder) conversation(pr model.PR) {
 	st := b.d.styles
 	type entry struct {
 		key, author, verb, body string
+		kind                    itemKind
 		at                      time.Time
 		reactions               []model.Reaction
 	}
 	var entries []entry
 	for _, c := range pr.Comments {
-		entries = append(entries, entry{key: c.ID, author: c.Author.Login, verb: "commented", body: c.Body, at: c.CreatedAt, reactions: c.Reactions})
+		entries = append(entries, entry{key: c.ID, kind: itemComment, author: c.Author.Login, verb: "commented", body: c.Body, at: c.CreatedAt, reactions: c.Reactions})
 	}
 	for _, r := range pr.Reviews {
 		if strings.TrimSpace(r.Body) == "" || r.State == "PENDING" {
 			continue
 		}
-		entries = append(entries, entry{key: r.ID, author: r.Author.Login, verb: "reviewed: " + reviewWord(r.State), body: r.Body, at: r.SubmittedAt})
+		entries = append(entries, entry{key: r.ID, kind: itemReview, author: r.Author.Login, verb: "reviewed: " + reviewWord(r.State), body: r.Body, at: r.SubmittedAt})
 	}
 	slices.SortStableFunc(entries, func(a, b entry) int { return a.at.Compare(b.at) })
 
@@ -496,7 +514,7 @@ func (b *detailBuilder) conversation(pr model.PR) {
 			author = "ghost"
 		}
 		head := author + " " + e.verb + st.Muted.Render(" · "+age(b.d.now().Sub(e.at))+" ago")
-		b.item(e.key, false, head, func() { b.commentBody(e.body, e.reactions) })
+		b.item(e.key, e.kind, false, head, func() { b.commentBody(e.body, e.reactions) })
 	}
 }
 

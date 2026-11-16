@@ -16,6 +16,7 @@ import (
 	"github.com/tdragon/argus/internal/gh"
 	"github.com/tdragon/argus/internal/notify"
 	"github.com/tdragon/argus/internal/poller"
+	"github.com/tdragon/argus/internal/state"
 	"github.com/tdragon/argus/internal/tui"
 )
 
@@ -49,6 +50,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	merges, err := state.Open(stateDir)
+	if err != nil {
+		return err
+	}
 	client, err := gh.New(api.ClientOptions{})
 	if err != nil {
 		return err
@@ -73,6 +78,7 @@ func run() error {
 		Me:       cfg.User,
 	}
 	m := tui.New(tui.Options{Context: ctx, Poller: p, Notifier: notifier, Detail: client, Styles: styles,
+		GitHub: client, Merges: merges, Runner: execx.Exec{},
 		Me: cfg.User, BotLogins: cfg.BotLogins,
 	})
 	_, err = tea.NewProgram(m).Run()

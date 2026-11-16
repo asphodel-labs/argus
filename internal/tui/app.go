@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/tdragon/argus/internal/execx"
 	"github.com/tdragon/argus/internal/model"
 	"github.com/tdragon/argus/internal/poller"
 )
@@ -82,8 +83,19 @@ type Options struct {
 	// Detail loads the PR detail for the detail pane. Without it the
 	// detail pane shows "Loading" for each PR.
 	Detail Detailer
-	Styles Styles
-	Keys   KeyMap
+	// GitHub runs the PR actions. Without it the action keys show a
+	// message.
+	GitHub GitHub
+	// Merges keeps the last merge method for each repository. It is
+	// optional.
+	Merges MergeMemory
+	// Runner runs the command that opens a URL in the browser.
+	Runner execx.Runner
+	// OpenCommand is the command that opens a URL. It is "open" on macOS
+	// and "xdg-open" on other systems when empty.
+	OpenCommand string
+	Styles      Styles
+	Keys        KeyMap
 	// Me is the login of the user. It drives the derived PR status.
 	Me string
 	// BotLogins are the logins that the bot filter counts as bots.
@@ -99,6 +111,10 @@ type Model struct {
 	poller   Poller
 	notifier Notifier
 	detailer Detailer
+	github   GitHub
+	merges   MergeMemory
+	runner   execx.Runner
+	openCmd  string
 	styles   Styles
 	keys     KeyMap
 
@@ -128,8 +144,16 @@ func New(opts Options) *Model {
 	if keys.Quit.Keys == nil {
 		keys = DefaultKeyMap()
 	}
+	openCmd := opts.OpenCommand
+	if openCmd == "" {
+		openCmd = openCommand()
+	}
 	m := &Model{
 		ctx:      ctx,
+		github:   opts.GitHub,
+		merges:   opts.Merges,
+		runner:   opts.Runner,
+		openCmd:  openCmd,
 		poller:   opts.Poller,
 		notifier: opts.Notifier,
 		detailer: opts.Detail,
@@ -219,6 +243,12 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		return nil
 	case notifyDoneMsg:
 		return m.handleNotifyDone(msg.err)
+	case actionDoneMsg:
+		return m.handleActionDone(msg)
+	case tea.PasteMsg:
+		if p, ok := m.topDialog().(paster); ok {
+			p.paste(msg.Content)
+		}
 	case detailLoadedMsg:
 		m.detail.loaded(msg)
 	case clearMessageMsg:
@@ -274,9 +304,13 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case k.FocusDetail.Matches(msg):
 		m.focus = FocusDetail
 	case m.help:
-	case m.focus == FocusList:
-		return m.handleListKey(msg)
 	default:
+		if cmd, ok := m.handleActionKey(msg); ok {
+			return cmd
+		}
+		if m.focus == FocusList {
+			return m.handleListKey(msg)
+		}
 		return m.handleDetailKey(msg)
 	}
 	return nil
