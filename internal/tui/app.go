@@ -91,6 +91,8 @@ type Options struct {
 	Merges MergeMemory
 	// Runner runs the command that opens a URL in the browser.
 	Runner execx.Runner
+	// Cloner clones a repository after the user confirms the clone prompt.
+	Cloner Cloner
 	// OpenCommand is the command that opens a URL. It is "open" on macOS
 	// and "xdg-open" on other systems when empty.
 	OpenCommand string
@@ -114,6 +116,7 @@ type Model struct {
 	github   GitHub
 	merges   MergeMemory
 	runner   execx.Runner
+	cloner   Cloner
 	openCmd  string
 	styles   Styles
 	keys     KeyMap
@@ -153,6 +156,7 @@ func New(opts Options) *Model {
 		github:   opts.GitHub,
 		merges:   opts.Merges,
 		runner:   opts.Runner,
+		cloner:   opts.Cloner,
 		openCmd:  openCmd,
 		poller:   opts.Poller,
 		notifier: opts.Notifier,
@@ -245,6 +249,8 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		return m.handleNotifyDone(msg.err)
 	case actionDoneMsg:
 		return m.handleActionDone(msg)
+	case CloneNeededMsg:
+		return m.handleCloneNeeded(msg)
 	case tea.PasteMsg:
 		if p, ok := m.topDialog().(paster); ok {
 			p.paste(msg.Content)

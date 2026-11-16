@@ -16,6 +16,7 @@ import (
 	"github.com/tdragon/argus/internal/gh"
 	"github.com/tdragon/argus/internal/notify"
 	"github.com/tdragon/argus/internal/poller"
+	"github.com/tdragon/argus/internal/review"
 	"github.com/tdragon/argus/internal/state"
 	"github.com/tdragon/argus/internal/tui"
 )
@@ -72,18 +73,28 @@ func run() error {
 		defer close(done)
 		_ = p.Run(ctx) // Run returns only the context error.
 	}()
+	worktrees := &review.Worktrees{Runner: execx.Exec{}, RepoRoot: cfg.RepoRoot, Repos: cfg.Repos}
+	cleaned := make(chan struct{})
+	go func() {
+		defer close(cleaned)
+		// The start-up cleanup removes only clean worktrees of merged or
+		// closed PRs. The TUI does not show its result.
+		_, _ = worktrees.Cleanup(ctx, client)
+	}()
 	notifier := &notify.Notifier{
 		Runner:   execx.Exec{},
 		SeenPath: filepath.Join(stateDir, notify.SeenFile),
 		Me:       cfg.User,
 	}
 	m := tui.New(tui.Options{Context: ctx, Poller: p, Notifier: notifier, Detail: client, Styles: styles,
-		GitHub: client, Merges: merges, Runner: execx.Exec{},
+		GitHub: client, Merges: merges, Runner: execx.Exec{}, Cloner: worktrees,
 		Me: cfg.User, BotLogins: cfg.BotLogins,
 	})
 	_, err = tea.NewProgram(m).Run()
 	cancel()
 	<-done
+	// Cleanup does not stop a git command halfway, so wait for it.
+	<-cleaned
 	return err
 }
 
