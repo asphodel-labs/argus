@@ -66,7 +66,6 @@ func DefaultKeyMap() KeyMap {
 			{Keys: []string{"ctrl+d", "ctrl+u"}, Desc: "half page down / up"},
 			{Keys: []string{"]", "["}, Desc: "next / previous thread"},
 			{Keys: []string{"za"}, Desc: "fold thread"},
-			{Keys: []string{"/", "n", "N"}, Desc: "search, next, previous"},
 		},
 		Actions: []Binding{
 			{Keys: []string{"A"}, Desc: "approve"},

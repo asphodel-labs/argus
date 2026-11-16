@@ -79,8 +79,11 @@ type Options struct {
 	Context  context.Context
 	Poller   Poller
 	Notifier Notifier
-	Styles   Styles
-	Keys     KeyMap
+	// Detail loads the PR detail for the detail pane. Without it the
+	// detail pane shows "Loading" for each PR.
+	Detail Detailer
+	Styles Styles
+	Keys   KeyMap
 	// Me is the login of the user. It drives the derived PR status.
 	Me string
 	// BotLogins are the logins that the bot filter counts as bots.
@@ -95,6 +98,7 @@ type Model struct {
 	ctx      context.Context
 	poller   Poller
 	notifier Notifier
+	detailer Detailer
 	styles   Styles
 	keys     KeyMap
 
@@ -105,6 +109,7 @@ type Model struct {
 	status        StatusBar
 	snapshot      *poller.Snapshot
 	list          listPane
+	detail        detailPane
 
 	// notifying is true while a Notifier.Process call runs. The calls run
 	// one at a time and in order. pendingNotify is the newest snapshot that
@@ -127,11 +132,13 @@ func New(opts Options) *Model {
 		ctx:      ctx,
 		poller:   opts.Poller,
 		notifier: opts.Notifier,
+		detailer: opts.Detail,
 		styles:   opts.Styles,
 		keys:     keys,
 		width:    80,
 		height:   24,
 		list:     newListPane(opts.Me, opts.BotLogins, opts.Now),
+		detail:   newDetailPane(opts.Me, opts.Now, opts.Styles),
 	}
 	m.resize()
 	return m
@@ -150,10 +157,16 @@ func (m *Model) layout() (listWidth, mainHeight int) {
 	return max(m.width*2/5, 20), max(m.height-1, 3)
 }
 
-// resize gives the list pane its height inside the border.
+// resize gives the panes their size inside the border.
 func (m *Model) resize() {
-	_, h := m.layout()
+	listWidth, h := m.layout()
 	m.list.setHeight(h - 2)
+	m.detail.setSize(m.detailWidth(listWidth)-2, h-2)
+}
+
+// detailWidth returns the width of the detail pane with its border.
+func (m *Model) detailWidth(listWidth int) int {
+	return max(m.width-listWidth, 20)
 }
 
 // Focus returns the focused pane.
@@ -179,31 +192,42 @@ func (m *Model) Init() tea.Cmd {
 	return waitForUpdate(m.poller.Updates())
 }
 
-// Update handles one message.
+// Update handles one message. After each message the detail pane follows
+// the list selection.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	cmd := m.update(msg)
+	if sync := m.syncDetail(); sync != nil {
+		cmd = tea.Batch(cmd, sync)
+	}
+	return m, cmd
+}
+
+func (m *Model) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.resize()
 	case tea.KeyPressMsg:
-		return m, m.handleKey(msg)
+		return m.handleKey(msg)
 	case PushDialogMsg:
 		m.dialogs = append(m.dialogs, msg.Dialog)
 	case CloseDialogMsg:
 		m.popDialog()
 	case pollerMsg:
-		return m, m.handlePoller(poller.Update(msg))
+		return m.handlePoller(poller.Update(msg))
 	case pollerClosedMsg:
-		return m, nil
+		return nil
 	case notifyDoneMsg:
-		return m, m.handleNotifyDone(msg.err)
+		return m.handleNotifyDone(msg.err)
+	case detailLoadedMsg:
+		m.detail.loaded(msg)
 	case clearMessageMsg:
 		m.status.clearMessage(msg.id)
 	case authorFilterMsg:
 		m.list.filters.Author = msg.login
 		m.filtersChanged()
 	}
-	return m, nil
+	return nil
 }
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
@@ -252,6 +276,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case m.help:
 	case m.focus == FocusList:
 		return m.handleListKey(msg)
+	default:
+		return m.handleDetailKey(msg)
 	}
 	return nil
 }
@@ -354,9 +380,8 @@ func (m *Model) View() tea.View {
 
 func (m *Model) panes(height int) string {
 	listWidth, _ := m.layout()
-	detailWidth := max(m.width-listWidth, 20)
 	list := m.pane(FocusList, listWidth, height, m.list.view(listWidth-2, m.styles, m.focus == FocusList))
-	detail := m.pane(FocusDetail, detailWidth, height, m.styles.Muted.Render("No PR selected."))
+	detail := m.pane(FocusDetail, m.detailWidth(listWidth), height, m.detail.view())
 	return lipgloss.JoinHorizontal(lipgloss.Top, list, detail)
 }
 
