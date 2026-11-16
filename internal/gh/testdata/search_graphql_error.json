@@ -1,0 +1,4 @@
+{
+  "data": null,
+  "errors": [{"type": "INVALID_SEARCH", "path": ["search"], "message": "Invalid search query."}]
+}

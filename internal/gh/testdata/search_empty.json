@@ -1,0 +1,6 @@
+{
+  "data": {
+    "rateLimit": {"cost": 11, "remaining": 4800, "resetAt": "2026-11-16T22:00:00Z"},
+    "search": {"issueCount": 0, "pageInfo": {"endCursor": null, "hasNextPage": false}, "nodes": []}
+  }
+}

@@ -84,6 +84,13 @@ type PR struct {
 	// comment of each thread.
 	Threads []Thread
 
+	// Activity counts and the author of the newest comment, review, or
+	// thread comment. The event diff compares them between snapshots.
+	CommentCount int
+	ReviewCount  int
+	ThreadCount  int
+	NewestAuthor Actor
+
 	Body     string
 	Checks   []Check
 	Reviews  []Review
