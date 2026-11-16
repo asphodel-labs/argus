@@ -19,6 +19,7 @@ import (
 // Default values for optional settings.
 const (
 	DefaultRefreshInterval = 10 * time.Minute
+	DefaultMinRefreshGap   = 5 * time.Minute
 	DefaultRepoRoot        = "~/sources"
 )
 
@@ -27,16 +28,20 @@ type Config struct {
 	Orgs            []string
 	User            string
 	RefreshInterval time.Duration
-	RepoRoot        string
-	BotLogins       []string
-	Repos           map[string]string
-	Colors          map[string]string
+	// MinRefreshGap is the minimum time between two full refreshes that
+	// new notifications start.
+	MinRefreshGap time.Duration
+	RepoRoot      string
+	BotLogins     []string
+	Repos         map[string]string
+	Colors        map[string]string
 }
 
 type fileConfig struct {
 	Orgs            []string          `toml:"orgs"`
 	User            string            `toml:"user"`
 	RefreshInterval string            `toml:"refresh_interval"`
+	MinRefreshGap   string            `toml:"min_refresh_gap"`
 	RepoRoot        string            `toml:"repo_root"`
 	BotLogins       []string          `toml:"bot_logins"`
 	Repos           map[string]string `toml:"repos"`
@@ -76,20 +81,17 @@ func Load(path string) (*Config, error) {
 		Orgs:            fc.Orgs,
 		User:            fc.User,
 		RefreshInterval: DefaultRefreshInterval,
+		MinRefreshGap:   DefaultMinRefreshGap,
 		RepoRoot:        expandHome(DefaultRepoRoot, home),
 		BotLogins:       fc.BotLogins,
 		Repos:           map[string]string{},
 		Colors:          map[string]string{},
 	}
-	if fc.RefreshInterval != "" {
-		d, err := time.ParseDuration(fc.RefreshInterval)
-		if err != nil {
-			return nil, fmt.Errorf("parse refresh_interval %q: %w", fc.RefreshInterval, err)
-		}
-		if d <= 0 {
-			return nil, fmt.Errorf("refresh_interval %q must be positive", fc.RefreshInterval)
-		}
-		cfg.RefreshInterval = d
+	if err := parseDuration("refresh_interval", fc.RefreshInterval, &cfg.RefreshInterval); err != nil {
+		return nil, err
+	}
+	if err := parseDuration("min_refresh_gap", fc.MinRefreshGap, &cfg.MinRefreshGap); err != nil {
+		return nil, err
 	}
 	if fc.RepoRoot != "" {
 		cfg.RepoRoot = expandHome(fc.RepoRoot, home)
@@ -120,6 +122,23 @@ func ResolveUser(ctx context.Context, cfg *Config, r execx.Runner) error {
 		return errors.New("gh api user returned an empty login")
 	}
 	cfg.User = login
+	return nil
+}
+
+// parseDuration sets *d from the value of the config key name.
+// An empty value keeps *d. A value that is not positive is an error.
+func parseDuration(name, value string, d *time.Duration) error {
+	if value == "" {
+		return nil
+	}
+	v, err := time.ParseDuration(value)
+	if err != nil {
+		return fmt.Errorf("parse %s %q: %w", name, value, err)
+	}
+	if v <= 0 {
+		return fmt.Errorf("%s %q must be positive", name, value)
+	}
+	*d = v
 	return nil
 }
 

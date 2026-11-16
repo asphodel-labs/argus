@@ -31,6 +31,9 @@ func TestLoadMissingFileGivesDefaults(t *testing.T) {
 	if cfg.RefreshInterval != DefaultRefreshInterval {
 		t.Errorf("RefreshInterval = %s, want %s", cfg.RefreshInterval, DefaultRefreshInterval)
 	}
+	if cfg.MinRefreshGap != DefaultMinRefreshGap {
+		t.Errorf("MinRefreshGap = %s, want %s", cfg.MinRefreshGap, DefaultMinRefreshGap)
+	}
 	if want := filepath.Join(home, "sources"); cfg.RepoRoot != want {
 		t.Errorf("RepoRoot = %q, want %q", cfg.RepoRoot, want)
 	}
@@ -60,6 +63,7 @@ func TestLoadFullFile(t *testing.T) {
 orgs = ["acme", "globex"]
 user = "octocat"
 refresh_interval = "5m30s"
+min_refresh_gap = "2m"
 repo_root = "~/work"
 bot_logins = ["renovate-bot"]
 
@@ -80,6 +84,7 @@ failed = "#ff0000"
 		Orgs:            []string{"acme", "globex"},
 		User:            "octocat",
 		RefreshInterval: 5*time.Minute + 30*time.Second,
+		MinRefreshGap:   2 * time.Minute,
 		RepoRoot:        filepath.Join(home, "work"),
 		BotLogins:       []string{"renovate-bot"},
 		Repos: map[string]string{
@@ -103,6 +108,9 @@ func TestLoadErrors(t *testing.T) {
 		{"bad duration", `refresh_interval = "ten minutes"`, "parse refresh_interval"},
 		{"negative duration", `refresh_interval = "-1m"`, "must be positive"},
 		{"zero duration", `refresh_interval = "0s"`, "must be positive"},
+		{"bad gap", `min_refresh_gap = "soon"`, "parse min_refresh_gap"},
+		{"negative gap", `min_refresh_gap = "-5m"`, "min_refresh_gap \"-5m\" must be positive"},
+		{"zero gap", `min_refresh_gap = "0s"`, "must be positive"},
 		{"bad toml", `orgs = [`, "parse config"},
 		{"wrong type", `orgs = "acme"`, "parse config"},
 	}
