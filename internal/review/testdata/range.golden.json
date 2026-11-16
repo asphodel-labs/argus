@@ -1,0 +1,10 @@
+[
+  {
+    "Path": "handler.go",
+    "Body": "refactor this hunk to reduce nesting",
+    "Line": 67,
+    "StartLine": 43,
+    "Side": "RIGHT",
+    "File": false
+  }
+]

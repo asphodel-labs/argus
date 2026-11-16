@@ -1,0 +1,34 @@
+[
+  {
+    "Path": "handler.go",
+    "Body": "consider splitting this file into smaller modules",
+    "Line": 0,
+    "StartLine": 0,
+    "Side": "",
+    "File": true
+  },
+  {
+    "Path": "handler.go",
+    "Body": "use errors.Is() instead of direct comparison",
+    "Line": 43,
+    "StartLine": 0,
+    "Side": "RIGHT",
+    "File": false
+  },
+  {
+    "Path": "handler.go",
+    "Body": "refactor this hunk to reduce nesting",
+    "Line": 67,
+    "StartLine": 43,
+    "Side": "RIGHT",
+    "File": false
+  },
+  {
+    "Path": "store.go",
+    "Body": "don't remove this validation",
+    "Line": 18,
+    "StartLine": 0,
+    "Side": "LEFT",
+    "File": false
+  }
+]
