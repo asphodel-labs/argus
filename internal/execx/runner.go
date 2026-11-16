@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"strings"
 )
 
 // Runner runs an external command.
@@ -35,4 +36,10 @@ func (Exec) Run(ctx context.Context, name string, args ...string) (string, strin
 		return stdout.String(), stderr.String(), exitErr.ExitCode(), nil
 	}
 	return stdout.String(), stderr.String(), -1, err
+}
+
+// ShellQuote returns s in single quotes for sh. Each single quote in s
+// ends the quoted part, adds an escaped quote, and starts a new part.
+func ShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

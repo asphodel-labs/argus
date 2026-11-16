@@ -126,7 +126,7 @@ func prRef(pr model.PR) string {
 func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	s := msg.String()
 	switch s {
-	case "A", "M", "f", "F", "c", "r", "+", "x", "o", "v":
+	case "A", "M", "f", "F", "c", "r", "+", "x", "o", "v", "p":
 	default:
 		return nil, false
 	}
@@ -138,12 +138,15 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	if s == "o" {
 		return m.openBrowser(pr), true
 	}
-	if s == "v" {
-		// revdiff needs the body, the head SHA, and the base branch of the
-		// detail.
+	if s == "v" || s == "p" {
+		// The worktree setup needs the head SHA and the base branch of the
+		// detail. revdiff also needs the body.
 		detail, loaded := m.detail.cache[pr.ID]
 		if !loaded {
 			return m.status.SetMessage("the PR detail is not loaded yet"), true
+		}
+		if s == "p" {
+			return m.launchClaude(detail.pr), true
 		}
 		return m.startReview(detail.pr), true
 	}

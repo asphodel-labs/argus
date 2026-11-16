@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tdragon/argus/internal/execx"
 	"github.com/tdragon/argus/internal/gh"
 	"github.com/tdragon/argus/internal/model"
 )
@@ -125,12 +126,6 @@ func (r *Revdiff) Prepare(ctx context.Context, pr model.PR) (Session, error) {
 	return s, nil
 }
 
-// shellQuote returns s in single quotes for sh. Each single quote in s
-// ends the quoted part, adds an escaped quote, and starts a new part.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
 // RevdiffCommand returns the revdiff command line of the session as one
 // sh string. agterm runs the overlay command through `sh -c`, so each
 // argument is quoted. preload adds --annotations with the annotation file.
@@ -147,7 +142,7 @@ func (r *Revdiff) RevdiffCommand(s Session, preload bool) string {
 	args = append(args, s.MergeBase, s.HeadSHA)
 	quoted := make([]string, len(args))
 	for i, a := range args {
-		quoted[i] = shellQuote(a)
+		quoted[i] = execx.ShellQuote(a)
 	}
 	return strings.Join(quoted, " ")
 }

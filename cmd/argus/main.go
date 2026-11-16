@@ -15,6 +15,7 @@ import (
 	"github.com/tdragon/argus/internal/config"
 	"github.com/tdragon/argus/internal/execx"
 	"github.com/tdragon/argus/internal/gh"
+	"github.com/tdragon/argus/internal/launch"
 	"github.com/tdragon/argus/internal/notify"
 	"github.com/tdragon/argus/internal/poller"
 	"github.com/tdragon/argus/internal/review"
@@ -87,7 +88,13 @@ func run() error {
 		GitHub:    client,
 		StateDir:  stateDir,
 		SessionID: os.Getenv("AGTERM_SESSION_ID"),
-		Bin:       revdiffPath(),
+		Bin:       binPath("revdiff"),
+	}
+	launcher := &launch.Claude{
+		Worktrees: worktrees,
+		Runner:    execx.Exec{},
+		SessionID: os.Getenv("AGTERM_SESSION_ID"),
+		Bin:       binPath("claude"),
 	}
 	notifier := &notify.Notifier{
 		Runner:   execx.Exec{},
@@ -95,7 +102,7 @@ func run() error {
 		Me:       cfg.User,
 	}
 	m := tui.New(tui.Options{Context: ctx, Poller: p, Notifier: notifier, Detail: client, Styles: styles,
-		GitHub: client, Merges: merges, Runner: execx.Exec{}, Cloner: worktrees, Reviewer: reviewer,
+		GitHub: client, Merges: merges, Runner: execx.Exec{}, Cloner: worktrees, Reviewer: reviewer, Launcher: launcher,
 		Me: cfg.User, BotLogins: cfg.BotLogins,
 	})
 	_, err = tea.NewProgram(m).Run()
@@ -115,14 +122,15 @@ func stateDir() (string, error) {
 	return filepath.Join(home, ".local", "state", "argus"), nil
 }
 
-// revdiffPath returns the absolute path of revdiff. The agterm overlay
-// runs its command with the PATH of the agterm app, which can miss the
-// directory of revdiff. It returns "revdiff" if the lookup fails.
-func revdiffPath() string {
-	if p, err := exec.LookPath("revdiff"); err == nil {
+// binPath returns the absolute path of the command name. agterm runs the
+// overlay command and the --command of a new session with the PATH of the
+// agterm app, which can miss the directory of revdiff or claude. binPath
+// returns name if the lookup fails.
+func binPath(name string) string {
+	if p, err := exec.LookPath(name); err == nil {
 		if abs, err := filepath.Abs(p); err == nil {
 			return abs
 		}
 	}
-	return "revdiff"
+	return name
 }

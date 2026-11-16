@@ -96,6 +96,9 @@ type Options struct {
 	// Reviewer runs revdiff for the v key and submits the review. Without
 	// it the v key shows a message.
 	Reviewer Reviewer
+	// Launcher starts the Claude session for the p key. Without it the p
+	// key shows a message.
+	Launcher Launcher
 	// OpenCommand is the command that opens a URL. It is "open" on macOS
 	// and "xdg-open" on other systems when empty.
 	OpenCommand string
@@ -121,6 +124,7 @@ type Model struct {
 	runner   execx.Runner
 	cloner   Cloner
 	reviewer Reviewer
+	launcher Launcher
 	openCmd  string
 	styles   Styles
 	keys     KeyMap
@@ -165,6 +169,7 @@ func New(opts Options) *Model {
 		runner:   opts.Runner,
 		cloner:   opts.Cloner,
 		reviewer: opts.Reviewer,
+		launcher: opts.Launcher,
 		openCmd:  openCmd,
 		poller:   opts.Poller,
 		notifier: opts.Notifier,
@@ -267,6 +272,8 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		return m.handleCloneNeeded(msg)
 	case revdiffDoneMsg:
 		return m.handleRevdiffDone(msg)
+	case claudeDoneMsg:
+		return m.handleClaudeDone(msg)
 	case tea.PasteMsg:
 		if p, ok := m.topDialog().(paster); ok {
 			p.paste(msg.Content)
