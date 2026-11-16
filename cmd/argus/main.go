@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
@@ -81,13 +82,20 @@ func run() error {
 		// closed PRs. The TUI does not show its result.
 		_, _ = worktrees.Cleanup(ctx, client)
 	}()
+	reviewer := &review.Revdiff{
+		Worktrees: worktrees,
+		GitHub:    client,
+		StateDir:  stateDir,
+		SessionID: os.Getenv("AGTERM_SESSION_ID"),
+		Bin:       revdiffPath(),
+	}
 	notifier := &notify.Notifier{
 		Runner:   execx.Exec{},
 		SeenPath: filepath.Join(stateDir, notify.SeenFile),
 		Me:       cfg.User,
 	}
 	m := tui.New(tui.Options{Context: ctx, Poller: p, Notifier: notifier, Detail: client, Styles: styles,
-		GitHub: client, Merges: merges, Runner: execx.Exec{}, Cloner: worktrees,
+		GitHub: client, Merges: merges, Runner: execx.Exec{}, Cloner: worktrees, Reviewer: reviewer,
 		Me: cfg.User, BotLogins: cfg.BotLogins,
 	})
 	_, err = tea.NewProgram(m).Run()
@@ -105,4 +113,16 @@ func stateDir() (string, error) {
 		return "", fmt.Errorf("find home directory: %w", err)
 	}
 	return filepath.Join(home, ".local", "state", "argus"), nil
+}
+
+// revdiffPath returns the absolute path of revdiff. The agterm overlay
+// runs its command with the PATH of the agterm app, which can miss the
+// directory of revdiff. It returns "revdiff" if the lookup fails.
+func revdiffPath() string {
+	if p, err := exec.LookPath("revdiff"); err == nil {
+		if abs, err := filepath.Abs(p); err == nil {
+			return abs
+		}
+	}
+	return "revdiff"
 }

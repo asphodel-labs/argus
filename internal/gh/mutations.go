@@ -45,6 +45,19 @@ type ReviewThreadInput struct {
 type PendingReview struct {
 	ID        string
 	CommitOID string
+	// Comments are the first pendingCommentsPage comments of the review.
+	Comments []PendingComment
+}
+
+// PendingComment is one comment of a pending review. Line and StartLine
+// are 0 when GitHub sends null. File is true for a file-level comment.
+type PendingComment struct {
+	Path         string
+	Body         string
+	Line         int
+	OriginalLine int
+	StartLine    int
+	File         bool
 }
 
 // mutate sends one mutation with the variable $input and decodes the
@@ -165,15 +178,22 @@ func (c *Client) UnresolveThread(ctx context.Context, threadID string) error {
 // at most one pending review on a PR.
 const pendingReviewsPage = 10
 
+// pendingCommentsPage is the number of comments the lookup reads from the
+// pending review.
+const pendingCommentsPage = 100
+
 var pendingReviewQuery = fmt.Sprintf(`query PendingReview($id: ID!) {
   node(id: $id) {
     ... on PullRequest {
       reviews(first: %d, states: [PENDING]) {
-        nodes { id viewerDidAuthor commit { oid } }
+        nodes {
+          id viewerDidAuthor commit { oid }
+          comments(first: %d) { nodes { path body line originalLine startLine subjectType } }
+        }
       }
     }
   }
-}`, pendingReviewsPage)
+}`, pendingReviewsPage, pendingCommentsPage)
 
 type pendingReviewResponse struct {
 	Node *struct {
@@ -184,6 +204,16 @@ type pendingReviewResponse struct {
 				Commit          *struct {
 					OID string `json:"oid"`
 				} `json:"commit"`
+				Comments struct {
+					Nodes []struct {
+						Path         string `json:"path"`
+						Body         string `json:"body"`
+						Line         *int   `json:"line"`
+						OriginalLine *int   `json:"originalLine"`
+						StartLine    *int   `json:"startLine"`
+						SubjectType  string `json:"subjectType"`
+					} `json:"nodes"`
+				} `json:"comments"`
 			} `json:"nodes"`
 		} `json:"reviews"`
 	} `json:"node"`
@@ -209,9 +239,27 @@ func (c *Client) PendingReview(ctx context.Context, prID string) (review Pending
 		if r.Commit != nil {
 			out.CommitOID = r.Commit.OID
 		}
+		for _, c := range r.Comments.Nodes {
+			out.Comments = append(out.Comments, PendingComment{
+				Path:         c.Path,
+				Body:         c.Body,
+				Line:         intOrZero(c.Line),
+				OriginalLine: intOrZero(c.OriginalLine),
+				StartLine:    intOrZero(c.StartLine),
+				File:         c.SubjectType == "FILE",
+			})
+		}
 		return out, true, nil
 	}
 	return PendingReview{}, false, nil
+}
+
+// intOrZero returns *p, or 0 for nil.
+func intOrZero(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
 }
 
 // StartReview makes a pending review on commitOID of the PR and returns

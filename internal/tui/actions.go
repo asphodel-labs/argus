@@ -126,7 +126,7 @@ func prRef(pr model.PR) string {
 func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	s := msg.String()
 	switch s {
-	case "A", "M", "f", "F", "c", "r", "+", "x", "o":
+	case "A", "M", "f", "F", "c", "r", "+", "x", "o", "v":
 	default:
 		return nil, false
 	}
@@ -137,6 +137,15 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	pr := m.detail.sel
 	if s == "o" {
 		return m.openBrowser(pr), true
+	}
+	if s == "v" {
+		// revdiff needs the body, the head SHA, and the base branch of the
+		// detail.
+		detail, loaded := m.detail.cache[pr.ID]
+		if !loaded {
+			return m.status.SetMessage("the PR detail is not loaded yet"), true
+		}
+		return m.startReview(detail.pr), true
 	}
 	if m.github == nil {
 		return m.status.SetMessage("GitHub actions are not available"), true

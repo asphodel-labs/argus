@@ -277,6 +277,18 @@ func TestPendingReview(t *testing.T) {
 			wantOK: true,
 		},
 		{
+			name: "comments",
+			data: `{"node": {"reviews": {"nodes": [{"id": "PRR_p", "viewerDidAuthor": true, "commit": {"oid": "abc123"},
+				"comments": {"nodes": [
+					{"path": "a.go", "body": "fix", "line": 12, "originalLine": 12, "startLine": 10, "subjectType": "LINE"},
+					{"path": "b.go", "body": "whole file", "line": null, "originalLine": null, "startLine": null, "subjectType": "FILE"}]}}]}}}`,
+			want: PendingReview{ID: "PRR_p", CommitOID: "abc123", Comments: []PendingComment{
+				{Path: "a.go", Body: "fix", Line: 12, OriginalLine: 12, StartLine: 10},
+				{Path: "b.go", Body: "whole file", File: true},
+			}},
+			wantOK: true,
+		},
+		{
 			name: "none",
 			data: `{"node": {"reviews": {"nodes": []}}}`,
 		},
@@ -288,7 +300,7 @@ func TestPendingReview(t *testing.T) {
 			if err != nil {
 				t.Fatalf("PendingReview: %v", err)
 			}
-			if got != tt.want || ok != tt.wantOK {
+			if !reflect.DeepEqual(got, tt.want) || ok != tt.wantOK {
 				t.Errorf("PendingReview = %+v %v, want %+v %v", got, ok, tt.want, tt.wantOK)
 			}
 			req := ft.requests()[0]

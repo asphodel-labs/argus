@@ -93,6 +93,9 @@ type Options struct {
 	Runner execx.Runner
 	// Cloner clones a repository after the user confirms the clone prompt.
 	Cloner Cloner
+	// Reviewer runs revdiff for the v key and submits the review. Without
+	// it the v key shows a message.
+	Reviewer Reviewer
 	// OpenCommand is the command that opens a URL. It is "open" on macOS
 	// and "xdg-open" on other systems when empty.
 	OpenCommand string
@@ -117,6 +120,7 @@ type Model struct {
 	merges   MergeMemory
 	runner   execx.Runner
 	cloner   Cloner
+	reviewer Reviewer
 	openCmd  string
 	styles   Styles
 	keys     KeyMap
@@ -135,6 +139,9 @@ type Model struct {
 	// waits for the running call.
 	notifying     bool
 	pendingNotify *poller.Snapshot
+
+	// reviewing holds the ids of the PRs whose revdiff overlay is open.
+	reviewing map[string]bool
 }
 
 // New returns the root model. A zero Options.Keys gives DefaultKeyMap.
@@ -157,6 +164,7 @@ func New(opts Options) *Model {
 		merges:   opts.Merges,
 		runner:   opts.Runner,
 		cloner:   opts.Cloner,
+		reviewer: opts.Reviewer,
 		openCmd:  openCmd,
 		poller:   opts.Poller,
 		notifier: opts.Notifier,
@@ -167,6 +175,8 @@ func New(opts Options) *Model {
 		height:   24,
 		list:     newListPane(opts.Me, opts.BotLogins, opts.Now),
 		detail:   newDetailPane(opts.Me, opts.Now, opts.Styles),
+
+		reviewing: map[string]bool{},
 	}
 	m.resize()
 	return m
@@ -255,6 +265,8 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		return m.handleActionDone(msg)
 	case CloneNeededMsg:
 		return m.handleCloneNeeded(msg)
+	case revdiffDoneMsg:
+		return m.handleRevdiffDone(msg)
 	case tea.PasteMsg:
 		if p, ok := m.topDialog().(paster); ok {
 			p.paste(msg.Content)

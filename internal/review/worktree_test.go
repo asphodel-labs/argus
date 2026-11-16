@@ -26,11 +26,16 @@ type reply struct {
 type fakeRunner struct {
 	calls   []string
 	replies map[string]reply
+	// hook runs before the reply of each command, if set.
+	hook func(name string, args []string)
 }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) (string, string, int, error) {
 	line := strings.Join(append([]string{name}, args...), " ")
 	f.calls = append(f.calls, line)
+	if f.hook != nil {
+		f.hook(name, args)
+	}
 	r := f.replies[line]
 	return r.stdout, r.stderr, r.code, r.err
 }
