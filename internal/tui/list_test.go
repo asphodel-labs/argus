@@ -25,6 +25,11 @@ func approved(p *model.PR) { p.ReviewDecision = model.DecisionApproved }
 func draft(p *model.PR)    { p.IsDraft = true }
 func bot(p *model.PR)      { p.Author.Typename = model.TypenameBot }
 
+// updated sets UpdatedAt to the minutes before listNow.
+func updated(minutes int) prOpt {
+	return func(p *model.PR) { p.UpdatedAt = listNow.Add(-time.Duration(minutes) * time.Minute) }
+}
+
 func testPR(id, repo string, n int, title, author string, opts ...prOpt) model.PR {
 	owner, name, _ := strings.Cut(repo, "/")
 	p := model.PR{
@@ -46,27 +51,39 @@ var (
 )
 
 // listSnapshot has the four section kinds. The org section has 12 more
-// PRs to load.
+// PRs to load. The update times give this list order:
+//
+//	 0 Needs my review     11 Org acme
+//	 1   acme/web          12   acme/web
+//	 2     R2              13     O2
+//	 3   acme/api          14     O3
+//	 4     R1              15   acme/api
+//	 5 My PRs              16     O1
+//	 6   acme/api          17   load more
+//	 7     M2              18 Personal
+//	 8   me/tool           19   me/dots
+//	 9     M3              20     P1
+//	10     M1
 func listSnapshot() *poller.Snapshot {
 	return &poller.Snapshot{
 		RefreshedAt: listNow,
 		Sections: []poller.Section{
 			{Scope: scopeReview, Total: 2, PRs: []model.PR{
-				testPR("R1", "acme/api", 11, "Fix login", "alice"),
-				testPR("R2", "acme/web", 12, "Bump deps", "renovate", bot),
+				testPR("R1", "acme/api", 11, "Fix login", "alice", updated(30)),
+				testPR("R2", "acme/web", 12, "Bump deps", "renovate", bot, updated(10)),
 			}},
 			{Scope: scopeMine, Total: 3, PRs: []model.PR{
-				testPR("M1", "me/tool", 3, "My tool change", "me", draft),
-				testPR("M2", "acme/api", 4, "My api change", "me", approved),
-				testPR("M3", "me/tool", 5, "Second tool change", "me"),
+				testPR("M1", "me/tool", 3, "My tool change", "me", draft, updated(60)),
+				testPR("M2", "acme/api", 4, "My api change", "me", approved, updated(5)),
+				testPR("M3", "me/tool", 5, "Second tool change", "me", updated(20)),
 			}},
 			{Scope: scopeAcme, Total: 15, PRs: []model.PR{
-				testPR("O1", "acme/api", 21, "Add cache", "bob", approved),
-				testPR("O2", "acme/web", 22, "Draft page", "carol", draft),
-				testPR("O3", "acme/web", 23, "Dependabot update", "dependabot", bot),
+				testPR("O1", "acme/api", 21, "Add cache", "bob", approved, updated(50)),
+				testPR("O2", "acme/web", 22, "Draft page", "carol", draft, updated(40)),
+				testPR("O3", "acme/web", 23, "Dependabot update", "dependabot", bot, updated(45)),
 			}},
 			{Scope: scopePersonal, Total: 1, PRs: []model.PR{
-				testPR("P1", "me/dots", 1, "Dotfiles", "dave"),
+				testPR("P1", "me/dots", 1, "Dotfiles", "dave", updated(70)),
 			}},
 		},
 	}
@@ -124,23 +141,30 @@ func selectedID(t *testing.T, m *Model) string {
 
 func TestListSectionsAndGroups(t *testing.T) {
 	m := newListModel(t)
+	// Every section groups its PRs by repository. The group with the most
+	// recently updated PR comes first, and so does the PR in a group.
 	want := []string{
 		"▾ Needs my review (2)",
-		"⏳ acme/api#11 Fix login",
-		"⏳ acme/web#12 Bump deps",
+		"▾ acme/web (1)",
+		"⏳ #12 Bump deps",
+		"▾ acme/api (1)",
+		"⏳ #11 Fix login",
 		"▾ My PRs (3)",
-		"acme/api",
+		"▾ acme/api (1)",
 		"✓  #4 My api change",
-		"me/tool",
-		"◌  #3 My tool change",
+		"▾ me/tool (2)",
 		"⏳ #5 Second tool change",
+		"◌  #3 My tool change",
 		"▾ Org acme (3)",
-		"✓  acme/api#21 Add cache",
-		"◌  acme/web#22 Draft page",
-		"⏳ acme/web#23 Dependabot update",
+		"▾ acme/web (2)",
+		"◌  #22 Draft page",
+		"⏳ #23 Dependabot update",
+		"▾ acme/api (1)",
+		"✓  #21 Add cache",
 		"… 12 more  [m] load more",
 		"▾ Personal (1)",
-		"⏳ me/dots#1 Dotfiles",
+		"▾ me/dots (1)",
+		"⏳ #1 Dotfiles",
 	}
 	got := rowText(m)
 	if len(got) != len(want) {
@@ -151,8 +175,12 @@ func TestListSectionsAndGroups(t *testing.T) {
 			t.Errorf("row %d = %q, want prefix %q", i, got[i], want[i])
 		}
 	}
-	if !strings.HasSuffix(got[1], "alice 3h") {
-		t.Errorf("PR row %q has no author and age", got[1])
+	if !strings.HasSuffix(got[4], "alice 3h") {
+		t.Errorf("PR row %q has no author and age", got[4])
+	}
+	// PR rows do not show the repository.
+	if strings.Contains(got[4], "acme/api") {
+		t.Errorf("PR row %q shows the repository", got[4])
 	}
 }
 
@@ -209,7 +237,7 @@ func TestListFilters(t *testing.T) {
 		t.Fatalf("hide drafts: %v", got)
 	}
 	sendKeys(m, "d", "b")
-	want := []string{"s:needs my review/R2", "s:my PRs/M2", "s:my PRs/M1", "s:my PRs/M3", "s:org acme/O3"}
+	want := []string{"s:needs my review/R2", "s:my PRs/M2", "s:my PRs/M3", "s:my PRs/M1", "s:org acme/O3"}
 	if got := prIDs(m); !slices.Equal(got, want) {
 		t.Fatalf("only bots: %v, want %v", got, want)
 	}
@@ -249,7 +277,7 @@ func TestListAuthorPicker(t *testing.T) {
 	if m.Filters().Author != "bob" {
 		t.Fatalf("author = %q, want bob", m.Filters().Author)
 	}
-	want := []string{"s:my PRs/M2", "s:my PRs/M1", "s:my PRs/M3", "s:org acme/O1"}
+	want := []string{"s:my PRs/M2", "s:my PRs/M3", "s:my PRs/M1", "s:org acme/O1"}
 	if got := prIDs(m); !slices.Equal(got, want) {
 		t.Fatalf("author bob: %v, want %v", got, want)
 	}
@@ -280,11 +308,10 @@ func TestAuthorPickerClear(t *testing.T) {
 func TestListLoadMore(t *testing.T) {
 	p := newFakePoller()
 	tm := newListProgram(t, p)
-	// Move to the org section: Needs my review, My PRs, Org acme.
-	tm.Send(key("]"))
-	tm.Send(key("]"))
-	tm.Send(key("j"))
-	tm.Send(key("m"))
+	// Move to O2 in the org section: Needs my review, My PRs, Org acme.
+	for _, k := range []string{"]", "]", "j", "j", "m"} {
+		tm.Send(key(k))
+	}
 	waitForText(t, tm, "loading more PRs of Org acme")
 
 	snap := listSnapshot()
@@ -303,8 +330,8 @@ func TestListLoadMore(t *testing.T) {
 	if len(p.loadMore) != 1 || p.loadMore[0] != scopeAcme {
 		t.Fatalf("LoadMore calls = %v, want [acme]", p.loadMore)
 	}
-	if got := selectedID(t, m); got != "O1" {
-		t.Fatalf("selected %s after load more, want O1", got)
+	if got := selectedID(t, m); got != "O2" {
+		t.Fatalf("selected %s after load more, want O2", got)
 	}
 }
 
@@ -327,25 +354,25 @@ func TestListLoadMoreAllLoaded(t *testing.T) {
 func TestListSelectionAfterRefresh(t *testing.T) {
 	p := newFakePoller()
 	tm := newListProgram(t, p)
-	// Select O2 (Draft page): ] ] to the org header, then j j.
-	for _, k := range []string{"]", "]", "j", "j"} {
+	// Select O3 (Dependabot update): ] ] to the org header, then j j j.
+	for _, k := range []string{"]", "]", "j", "j", "j"} {
 		tm.Send(key(k))
 	}
 	snap := listSnapshot()
 	org := &snap.Sections[2]
-	org.PRs = append([]model.PR{testPR("O9", "acme/web", 29, "New on top", "frank")}, org.PRs...)
+	org.PRs = append([]model.PR{testPR("O9", "acme/web", 29, "New on top", "frank", updated(0))}, org.PRs...)
 	p.ch <- poller.Update{Snapshot: snap}
 	waitForText(t, tm, "New on top")
 	tm.Send(key("q"))
-	if got := selectedID(t, finalModel(t, tm)); got != "O2" {
-		t.Fatalf("selected %s after refresh, want O2", got)
+	if got := selectedID(t, finalModel(t, tm)); got != "O3" {
+		t.Fatalf("selected %s after refresh, want O3", got)
 	}
 }
 
 func TestListSelectionFallbacks(t *testing.T) {
 	m := newListModel(t)
 	// R1 is in Needs my review. A refresh moves it to the org section.
-	sendKeys(m, "j")
+	sendKeys(m, "j", "j", "j", "j")
 	if selectedID(t, m) != "R1" {
 		t.Fatal("setup: R1 not selected")
 	}
@@ -381,13 +408,14 @@ func TestListNavigation(t *testing.T) {
 		{[]string{"j"}, last},
 		{[]string{"g", "g"}, 0},
 		{[]string{"k"}, 0},
-		{[]string{"]"}, 3},
-		{[]string{"]"}, 9},
-		{[]string{"["}, 3},
+		{[]string{"]"}, 5},
+		{[]string{"]"}, 11},
+		{[]string{"["}, 5},
 		{[]string{"["}, 0},
 		{[]string{"["}, 0},
+		{[]string{"ctrl+d"}, 18},
 		{[]string{"ctrl+d"}, last},
-		{[]string{"ctrl+u"}, 0},
+		{[]string{"ctrl+u", "ctrl+u"}, 0},
 		{[]string{"g", "x", "j"}, 1},
 	}
 	for i, s := range steps {
@@ -400,17 +428,77 @@ func TestListNavigation(t *testing.T) {
 
 func TestListFold(t *testing.T) {
 	m := newListModel(t)
-	sendKeys(m, "]", "j", "j", "z", "a")
-	if m.list.cursor != 3 || m.list.rows[3].title != "My PRs" {
+	sendKeys(m, "]", "z", "a")
+	if m.list.cursor != 5 || m.list.rows[5].title != "My PRs" {
 		t.Fatalf("cursor = %d, want the My PRs row", m.list.cursor)
 	}
 	got := rowText(m)
-	if got[3] != "▸ My PRs (3)" || !strings.HasPrefix(got[4], "▾ Org acme") {
+	if got[5] != "▸ My PRs (3)" || !strings.HasPrefix(got[6], "▾ Org acme") {
 		t.Fatalf("folded rows:\n%s", strings.Join(got, "\n"))
 	}
 	sendKeys(m, "z", "a")
-	if got := rowText(m); got[4] != "acme/api" {
+	if got := rowText(m); got[6] != "▾ acme/api (1)" {
 		t.Fatalf("unfolded rows:\n%s", strings.Join(got, "\n"))
+	}
+}
+
+func TestListFoldRepoGroup(t *testing.T) {
+	m := newListModel(t)
+	// za on a PR row folds its repository group: M2 is in acme/api.
+	sendKeys(m, "]", "j", "j", "z", "a")
+	if m.list.cursor != 6 {
+		t.Fatalf("cursor = %d, want the acme/api row 6", m.list.cursor)
+	}
+	got := rowText(m)
+	if got[6] != "▸ acme/api (1)" || got[7] != "▾ me/tool (2)" {
+		t.Fatalf("folded rows:\n%s", strings.Join(got, "\n"))
+	}
+	// The acme/api groups of the other sections stay open.
+	if ids := prIDs(m); !slices.Contains(ids, "s:needs my review/R1") || !slices.Contains(ids, "s:org acme/O1") {
+		t.Fatalf("the fold changed another section: %v", ids)
+	}
+	// The fold stays after a refresh.
+	m.Update(pollerMsg{Snapshot: listSnapshot()})
+	if got := rowText(m); got[6] != "▸ acme/api (1)" || m.list.cursor != 6 {
+		t.Fatalf("rows after refresh, cursor %d:\n%s", m.list.cursor, strings.Join(got, "\n"))
+	}
+	// za on the group row opens it.
+	sendKeys(m, "z", "a")
+	if got := rowText(m); got[6] != "▾ acme/api (1)" || !strings.HasPrefix(got[7], "✓  #4") {
+		t.Fatalf("unfolded rows:\n%s", strings.Join(got, "\n"))
+	}
+}
+
+func TestListEnterAndSpaceOpenPR(t *testing.T) {
+	p := newFakePoller()
+	det := &fakeDetailer{prs: map[string]model.PR{}}
+	for _, sec := range listSnapshot().Sections {
+		for _, pr := range sec.PRs {
+			det.prs[pr.ID] = pr
+		}
+	}
+	tm := newTestProgram(t, Options{Poller: p, Detail: det, Me: "me", BotLogins: []string{"renovate"}, Now: fixedNow})
+	p.ch <- poller.Update{Snapshot: listSnapshot()}
+	waitForText(t, tm, "Fix login")
+	// The cursor moves to R2 and R1 with no detail query.
+	for _, k := range []string{"j", "j", "j", "j"} {
+		tm.Send(key(k))
+	}
+	tm.Send(key("enter"))
+	waitForText(t, tm, "acme/api#11 · alice")
+	// space opens the PR under the cursor: M2.
+	tm.Send(key("j"))
+	tm.Send(key("j"))
+	tm.Send(key("j"))
+	tm.Send(key("space"))
+	waitForText(t, tm, "acme/api#4 · me")
+	tm.Send(key("q"))
+	m := finalModel(t, tm)
+	if got := det.calls; !slices.Equal(got, []string{"R1", "M2"}) {
+		t.Fatalf("detail calls %v, want [R1 M2]", got)
+	}
+	if pr, ok := m.Opened(); !ok || pr.ID != "M2" || m.Focus() != FocusList {
+		t.Fatalf("opened %q %v, focus %v", pr.ID, ok, m.Focus())
 	}
 }
 
@@ -423,71 +511,12 @@ func TestListScrollKeepsCursorVisible(t *testing.T) {
 		t.Fatalf("offset = %d, want %d", m.list.offset, len(m.list.rows)-5)
 	}
 	view := ansi.Strip(m.list.view(40, m.styles, true))
-	if !strings.Contains(view, "› ⏳ me/dots#1") {
+	if !strings.Contains(view, "›    ⏳ #1 Dotfiles") {
 		t.Fatalf("cursor row not visible:\n%s", view)
 	}
 	sendKeys(m, "g", "g")
 	if m.list.offset != 0 {
 		t.Fatalf("offset = %d after gg", m.list.offset)
-	}
-}
-
-func TestListSearch(t *testing.T) {
-	p := newFakePoller()
-	tm := newListProgram(t, p)
-	tm.Send(key("/"))
-	// q types a q in the search input; it does not quit.
-	for _, k := range []string{"q", "backspace", "c", "h", "a", "n", "g", "e"} {
-		tm.Send(key(k))
-	}
-	tm.Send(key("enter"))
-	tm.Send(key("n"))
-	tm.Send(key("n"))
-	tm.Send(key("N"))
-	tm.Send(key("q"))
-	m := finalModel(t, tm)
-	// Matches in row order: M2 (api change), M1 (tool change), M3.
-	if got := selectedID(t, m); got != "M1" {
-		t.Fatalf("selected %s, want M1", got)
-	}
-	if m.list.searching || m.list.query != "change" {
-		t.Fatalf("searching %v, query %q", m.list.searching, m.list.query)
-	}
-}
-
-func TestListSearchMatchesAndWraps(t *testing.T) {
-	m := newListModel(t)
-	search := func(q string) {
-		sendKeys(m, "/")
-		for _, r := range q {
-			sendKeys(m, string(r))
-		}
-		sendKeys(m, "enter")
-	}
-	search("DOTS")
-	if selectedID(t, m) != "P1" {
-		t.Fatal("repo match failed")
-	}
-	search("#21")
-	if selectedID(t, m) != "O1" {
-		t.Fatal("number match failed")
-	}
-	search("alice")
-	if selectedID(t, m) != "R1" {
-		t.Fatal("author match with wrap failed")
-	}
-	sendKeys(m, "N")
-	if selectedID(t, m) != "R1" {
-		t.Fatal("N with one match moved the cursor")
-	}
-	search("nothing")
-	if m.Status().Message() != "no match: nothing" || selectedID(t, m) != "R1" {
-		t.Fatalf("no match: message %q", m.Status().Message())
-	}
-	// esc cancels the input and keeps the last query.
-	sendKeys(m, "/", "x", "esc")
-	if m.list.searching || m.list.query != "nothing" || m.Dialogs() != 0 {
-		t.Fatal("esc did not cancel the search input")
 	}
 }
 

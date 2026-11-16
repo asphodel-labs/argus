@@ -128,38 +128,28 @@ func (d *detailPane) entry() (detailEntry, bool) {
 	return e, ok
 }
 
-// selectPR makes pr the selected PR. It reports whether the selection
-// changed. A new selection starts at the top with no current item.
-func (d *detailPane) selectPR(pr model.PR) bool {
-	changed := !d.hasSel || d.sel.ID != pr.ID
+// selectPR makes pr the selected PR. A new selection starts at the top
+// with no current item.
+func (d *detailPane) selectPR(pr model.PR) {
+	if !d.hasSel || d.sel.ID != pr.ID {
+		d.offset, d.cur, d.pending = 0, -1, ""
+		d.dirty = true
+	}
 	d.sel, d.hasSel = pr, true
-	if changed {
-		d.offset, d.cur, d.pending = 0, -1, ""
-		d.dirty = true
-	}
-	return changed
 }
 
-func (d *detailPane) clearSelection() {
-	if d.hasSel {
-		d.hasSel = false
-		d.sel = model.PR{}
-		d.offset, d.cur, d.pending = 0, -1, ""
-		d.dirty = true
-	}
-}
-
-// needsFetch reports whether the selected PR needs a PRDetail call. A new
-// selection needs one if the cache has no entry younger than detailTTL. A
-// kept selection needs one only if the summary is newer than the summary
-// of the last call, so that a failed call does not repeat on each message.
-func (d *detailPane) needsFetch(changed bool) bool {
+// needsFetch reports whether the selected PR needs a PRDetail call. An
+// open (opened true) needs one if the cache has no entry younger than
+// detailTTL. Otherwise the PR needs one only if the summary is newer than
+// the summary of the last call, so that a failed call does not repeat on
+// each message.
+func (d *detailPane) needsFetch(opened bool) bool {
 	id := d.sel.ID
 	if d.loading[id] {
 		return false
 	}
 	e, cached := d.cache[id]
-	if changed && (!cached || d.now().Sub(e.at) >= detailTTL) {
+	if opened && (!cached || d.now().Sub(e.at) >= detailTTL) {
 		return true
 	}
 	last, fetched := d.fetchedFor[id]
@@ -180,17 +170,34 @@ func (d *detailPane) loaded(msg detailLoadedMsg) {
 	}
 }
 
-// syncDetail follows the list selection: it selects the PR in the detail
-// pane and starts a PRDetail call if the cache cannot serve it.
-func (m *Model) syncDetail() tea.Cmd {
+// openPR shows pr in the detail pane and marks its row in the list. It
+// starts a PRDetail call if the cache has no entry younger than
+// detailTTL. A second open of the shown PR keeps the view and retries a
+// failed call.
+func (m *Model) openPR(pr model.PR) tea.Cmd {
 	d := &m.detail
-	pr, ok := m.list.Selected()
-	if !ok {
-		d.clearSelection()
+	d.selectPR(pr)
+	m.list.opened = pr.ID
+	if m.detailer == nil || !d.needsFetch(true) {
 		return nil
 	}
-	changed := d.selectPR(pr)
-	if m.detailer == nil || !d.needsFetch(changed) {
+	return m.fetchDetail(pr)
+}
+
+// syncDetail gives the opened PR the newest summary from the snapshot. It
+// starts a PRDetail call if the summary is newer than the summary of the
+// last call. A PR that left the snapshot keeps its last summary.
+func (m *Model) syncDetail() tea.Cmd {
+	d := &m.detail
+	if !d.hasSel {
+		return nil
+	}
+	pr, ok := m.list.findPR(d.sel.ID)
+	if !ok {
+		return nil
+	}
+	d.sel = pr
+	if m.detailer == nil || !d.needsFetch(false) {
 		return nil
 	}
 	return m.fetchDetail(pr)
@@ -306,7 +313,7 @@ func (d *detailPane) isFolded(key string, def bool) bool {
 func (d *detailPane) view() string {
 	st := d.styles
 	if !d.hasSel {
-		return st.Muted.Render("No PR selected.")
+		return st.Muted.Render("No PR open. Press enter on a PR in the list.")
 	}
 	d.layout()
 	if _, ok := d.entry(); !ok {
@@ -315,7 +322,7 @@ func (d *detailPane) view() string {
 			return strings.Join([]string{
 				st.Error.Render(ansi.Truncate("Cannot load "+ref, d.width, "…")),
 				ansi.Wrap(firstLine(err.Error()), d.width, ""),
-				st.Muted.Render(ansi.Truncate("Select the PR again to retry.", d.width, "…")),
+				st.Muted.Render(ansi.Truncate("Press enter on the PR to retry.", d.width, "…")),
 			}, "\n")
 		}
 		return st.Muted.Render(ansi.Truncate("Loading "+ref+"…", d.width, "…"))

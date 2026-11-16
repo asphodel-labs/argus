@@ -120,8 +120,9 @@ func prRef(pr model.PR) string {
 	return pr.Repo.FullName() + "#" + strconv.Itoa(pr.Number)
 }
 
-// handleActionKey runs the PR action of the key on the selected PR. ok is
-// false if the key is not an action key.
+// handleActionKey runs the PR action of the key on the opened PR, not on
+// the PR under the list cursor. ok is false if the key is not an action
+// key.
 func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	s := msg.String()
 	switch s {
@@ -130,10 +131,10 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 		return nil, false
 	}
 	m.list.pending, m.detail.pending = "", ""
-	pr, sel := m.list.Selected()
-	if !sel {
-		return m.status.SetMessage("select a PR first"), true
+	if !m.detail.hasSel {
+		return m.status.SetMessage("open a PR with enter"), true
 	}
+	pr := m.detail.sel
 	if s == "o" {
 		return m.openBrowser(pr), true
 	}

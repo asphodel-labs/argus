@@ -176,6 +176,10 @@ func New(opts Options) *Model {
 // not on a PR.
 func (m *Model) Selected() (model.PR, bool) { return m.list.Selected() }
 
+// Opened returns the PR that the detail pane shows, or false if no PR is
+// open. The action keys act on this PR.
+func (m *Model) Opened() (model.PR, bool) { return m.detail.sel, m.detail.hasSel }
+
 // Filters returns the list filters.
 func (m *Model) Filters() Filters { return m.list.filters }
 
@@ -220,8 +224,8 @@ func (m *Model) Init() tea.Cmd {
 	return waitForUpdate(m.poller.Updates())
 }
 
-// Update handles one message. After each message the detail pane follows
-// the list selection.
+// Update handles one message. After each message the opened PR gets its
+// newest summary from the snapshot.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmd := m.update(msg)
 	if sync := m.syncDetail(); sync != nil {
@@ -259,6 +263,8 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		m.detail.loaded(msg)
 	case clearMessageMsg:
 		m.status.clearMessage(msg.id)
+	case finderPickMsg:
+		return m.handleFinderPick(msg.entry)
 	case authorFilterMsg:
 		m.list.filters.Author = msg.login
 		m.filtersChanged()
@@ -276,10 +282,6 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 
 	k := m.keys
-	// The search input gets every key but ctrl+c, so that q types a q.
-	if len(m.dialogs) == 0 && !m.help && m.focus == FocusList && m.list.searching && !k.ForceQuit.Matches(msg) {
-		return m.handleSearchInput(msg)
-	}
 	switch {
 	case k.Quit.Matches(msg), k.ForceQuit.Matches(msg):
 		return m.requestQuit()

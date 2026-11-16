@@ -42,14 +42,15 @@ type listRow struct {
 	// more is the number of PRs that load more can still load.
 	more int
 
-	pr       model.PR
-	status   model.Status
-	showRepo bool
-	indent   int
+	// group is the key of the repository group row of a PR row.
+	group string
+
+	pr     model.PR
+	status model.Status
 }
 
 // listPane is the state of the list pane: the rows, the cursor, the
-// filters, the folds, and the search.
+// filters, and the folds.
 type listPane struct {
 	me        string
 	botLogins []string
@@ -68,11 +69,9 @@ type listPane struct {
 	// pending is the first key of a two-key sequence: "g" or "z".
 	pending string
 
-	// searching is true while the user types the search query in input.
-	// query is the last confirmed query for n and N.
-	searching bool
-	input     string
-	query     string
+	// opened is the ID of the PR that the detail pane shows. The list
+	// marks its row.
+	opened string
 }
 
 func newListPane(me string, botLogins []string, now func() time.Time) listPane {
@@ -89,6 +88,22 @@ func (l *listPane) Selected() (model.PR, bool) {
 		return model.PR{}, false
 	}
 	return l.rows[l.cursor].pr, true
+}
+
+// findPR returns the newest summary of the PR with the ID from the
+// snapshot. It ignores the filters and the folds.
+func (l *listPane) findPR(id string) (model.PR, bool) {
+	if l.snapshot == nil {
+		return model.PR{}, false
+	}
+	for _, sec := range l.snapshot.Sections {
+		for _, pr := range sec.PRs {
+			if pr.ID == id {
+				return pr, true
+			}
+		}
+	}
+	return model.PR{}, false
 }
 
 func (l *listPane) setSnapshot(s *poller.Snapshot) {
@@ -140,10 +155,17 @@ func (l *listPane) rebuild() {
 	l.scroll()
 }
 
-func (l *listPane) buildRows() []listRow {
-	if l.snapshot == nil {
-		return nil
-	}
+// repoGroup is the PRs of one repository in a section.
+type repoGroup struct {
+	repo string
+	prs  []model.PR
+}
+
+// groupKey returns the key of the repository group row in a section.
+func groupKey(section, repo string) string { return section + "/repo:" + repo }
+
+// sectionOrder returns the indexes of the snapshot sections in list order.
+func (l *listPane) sectionOrder() []int {
 	order := make([]int, len(l.snapshot.Sections))
 	for i := range order {
 		order[i] = i
@@ -151,18 +173,56 @@ func (l *listPane) buildRows() []listRow {
 	slices.SortStableFunc(order, func(a, b int) int {
 		return int(l.snapshot.Sections[a].Scope.Kind) - int(l.snapshot.Sections[b].Scope.Kind)
 	})
+	return order
+}
 
+// visiblePRs returns the PRs of the section that the filters keep. The
+// filters do not apply to My PRs.
+func (l *listPane) visiblePRs(sec poller.Section) []model.PR {
+	mine := sec.Scope.Kind == poller.ScopeMine
+	var prs []model.PR
+	for _, pr := range sec.PRs {
+		if mine || l.filters.Match(pr, l.botLogins) {
+			prs = append(prs, pr)
+		}
+	}
+	return prs
+}
+
+// groupByRepo groups the PRs by repository. The group with the most
+// recently updated PR comes first. Inside a group, the most recently
+// updated PR comes first. Equal times keep the snapshot order.
+func groupByRepo(prs []model.PR) []repoGroup {
+	var groups []repoGroup
+	idx := map[string]int{}
+	for _, pr := range prs {
+		name := pr.Repo.FullName()
+		i, ok := idx[name]
+		if !ok {
+			i = len(groups)
+			idx[name] = i
+			groups = append(groups, repoGroup{repo: name})
+		}
+		groups[i].prs = append(groups[i].prs, pr)
+	}
+	for i := range groups {
+		slices.SortStableFunc(groups[i].prs, func(a, b model.PR) int { return b.UpdatedAt.Compare(a.UpdatedAt) })
+	}
+	slices.SortStableFunc(groups, func(a, b repoGroup) int {
+		return b.prs[0].UpdatedAt.Compare(a.prs[0].UpdatedAt)
+	})
+	return groups
+}
+
+func (l *listPane) buildRows() []listRow {
+	if l.snapshot == nil {
+		return nil
+	}
 	var rows []listRow
-	for _, si := range order {
+	for _, si := range l.sectionOrder() {
 		sec := l.snapshot.Sections[si]
 		key := sectionKey(sec.Scope)
-		mine := sec.Scope.Kind == poller.ScopeMine
-		var prs []model.PR
-		for _, pr := range sec.PRs {
-			if mine || l.filters.Match(pr, l.botLogins) {
-				prs = append(prs, pr)
-			}
-		}
+		prs := l.visiblePRs(sec)
 		rows = append(rows, listRow{
 			kind: rowSection, key: key, section: si, scope: sec.Scope,
 			title: sectionTitle(sec.Scope), shown: len(prs), loaded: len(sec.PRs),
@@ -170,45 +230,23 @@ func (l *listPane) buildRows() []listRow {
 		if l.folded[key] {
 			continue
 		}
-		prRow := func(pr model.PR, showRepo bool, indent int) listRow {
-			return listRow{
-				kind: rowPR, key: key + "/" + pr.ID, section: si, scope: sec.Scope,
-				pr: pr, status: model.DeriveStatus(pr, l.me), showRepo: showRepo, indent: indent,
+		for _, g := range groupByRepo(prs) {
+			gk := groupKey(key, g.repo)
+			rows = append(rows, listRow{
+				kind: rowGroup, key: gk, section: si, scope: sec.Scope, title: g.repo, shown: len(g.prs),
+			})
+			if l.folded[gk] {
+				continue
 			}
-		}
-		if mine {
-			rows = append(rows, l.groupRows(prs, si, sec.Scope, key, prRow)...)
-		} else {
-			for _, pr := range prs {
-				rows = append(rows, prRow(pr, true, 1))
+			for _, pr := range g.prs {
+				rows = append(rows, listRow{
+					kind: rowPR, key: key + "/" + pr.ID, section: si, scope: sec.Scope, group: gk,
+					pr: pr, status: model.DeriveStatus(pr, l.me),
+				})
 			}
 		}
 		if more := sec.Total - len(sec.PRs); more > 0 && (sec.Scope.Kind == poller.ScopeOrg || sec.Scope.Kind == poller.ScopePersonal) {
 			rows = append(rows, listRow{kind: rowFooter, key: key + "/more", section: si, scope: sec.Scope, more: more})
-		}
-	}
-	return rows
-}
-
-// groupRows returns the My PRs rows: one group row for each repository, in
-// name order, and the PRs of the repository under it.
-func (l *listPane) groupRows(prs []model.PR, si int, scope poller.Scope, key string,
-	prRow func(model.PR, bool, int) listRow) []listRow {
-	var repos []string
-	byRepo := map[string][]model.PR{}
-	for _, pr := range prs {
-		name := pr.Repo.FullName()
-		if _, ok := byRepo[name]; !ok {
-			repos = append(repos, name)
-		}
-		byRepo[name] = append(byRepo[name], pr)
-	}
-	slices.Sort(repos)
-	var rows []listRow
-	for _, repo := range repos {
-		rows = append(rows, listRow{kind: rowGroup, key: key + "/repo:" + repo, section: si, scope: scope, title: repo})
-		for _, pr := range byRepo[repo] {
-			rows = append(rows, prRow(pr, false, 2))
 		}
 	}
 	return rows
@@ -226,13 +264,8 @@ func (l *listPane) scroll() {
 	l.offset = max(min(l.offset, len(l.rows)-h), 0)
 }
 
-// viewHeight is the number of row lines. The search input takes one line.
-func (l *listPane) viewHeight() int {
-	if l.searching {
-		return max(l.height-1, 1)
-	}
-	return l.height
-}
+// viewHeight is the number of row lines.
+func (l *listPane) viewHeight() int { return l.height }
 
 func (l *listPane) setCursor(i int) {
 	if len(l.rows) == 0 {
@@ -255,48 +288,39 @@ func (l *listPane) jumpSection(dir int) {
 	}
 }
 
-// toggleFold folds or unfolds the section of the cursor row. The cursor
-// goes to the section row.
+// toggleFold folds or unfolds the innermost fold of the cursor row: the
+// repository group of a group row or a PR row, or else the section. The
+// cursor goes to the row of the fold.
 func (l *listPane) toggleFold() {
 	if l.cursor >= len(l.rows) {
 		return
 	}
-	key := sectionKey(l.rows[l.cursor].scope)
+	r := l.rows[l.cursor]
+	key := sectionKey(r.scope)
+	switch r.kind {
+	case rowGroup:
+		key = r.key
+	case rowPR:
+		key = r.group
+	}
 	l.folded[key] = !l.folded[key]
 	idx := slices.IndexFunc(l.rows, func(r listRow) bool { return r.key == key })
 	l.cursor = max(idx, 0)
 	l.rebuild()
 }
 
-// matches reports whether a PR row matches the search query. The match
-// ignores case and looks at the repository, the number, the title, and the
-// author.
-func (r listRow) matches(query string) bool {
-	if r.kind != rowPR || query == "" {
+// reveal unfolds the section and the repository group of the PR row key
+// and moves the cursor to the row. It reports whether the row exists.
+func (l *listPane) reveal(rowKey, section, group string) bool {
+	delete(l.folded, section)
+	delete(l.folded, group)
+	l.rebuild()
+	idx := slices.IndexFunc(l.rows, func(r listRow) bool { return r.key == rowKey })
+	if idx < 0 {
 		return false
 	}
-	q := strings.ToLower(query)
-	for _, s := range []string{r.pr.Repo.FullName(), "#" + strconv.Itoa(r.pr.Number), r.pr.Title, r.pr.Author.Login} {
-		if strings.Contains(strings.ToLower(s), q) {
-			return true
-		}
-	}
-	return false
-}
-
-// findMatch moves the cursor to the next (dir 1) or previous (dir -1) row
-// that matches the query. The search wraps. It reports whether a row
-// matched.
-func (l *listPane) findMatch(dir int) bool {
-	n := len(l.rows)
-	for step := 1; step <= n; step++ {
-		i := ((l.cursor+dir*step)%n + n) % n
-		if l.rows[i].matches(l.query) {
-			l.setCursor(i)
-			return true
-		}
-	}
-	return false
+	l.setCursor(idx)
+	return true
 }
 
 // authors returns the authors of the PRs in the sections that the filters
@@ -344,12 +368,6 @@ func (l *listPane) view(width int, st Styles, focused bool) string {
 	if len(l.rows) == 0 {
 		lines = append(lines, st.Muted.Render("No pull requests."))
 	}
-	if l.searching {
-		for len(lines) < h {
-			lines = append(lines, "")
-		}
-		lines = append(lines, ansi.Truncate("/"+l.input+"█", width, "…"))
-	}
 	return strings.Join(lines, "\n")
 }
 
@@ -367,7 +385,11 @@ func (l *listPane) renderRow(r listRow, width int, st Styles) string {
 		}
 		line = st.Title.Render(arrow+" "+r.title) + " " + st.Muted.Render(count)
 	case rowGroup:
-		line = "  " + r.title
+		arrow := "▾"
+		if l.folded[r.key] {
+			arrow = "▸"
+		}
+		line = "  " + arrow + " " + r.title + " " + st.Muted.Render(fmt.Sprintf("(%d)", r.shown))
 	case rowFooter:
 		line = st.Muted.Render(fmt.Sprintf("  … %d more  [m] load more", r.more))
 	default:
@@ -376,16 +398,18 @@ func (l *listPane) renderRow(r listRow, width int, st Styles) string {
 	return ansi.Truncate(line, width, "…")
 }
 
-// renderPR renders a PR row: the status icon in its color, the repository
-// and number, the title, the author, and the age. The title is cut to fit.
+// renderPR renders a PR row: the open mark, the status icon in its color,
+// the number, the title, the author, and the age. The group row above
+// shows the repository. The title is cut to fit.
 func (l *listPane) renderPR(r listRow, width int, st Styles) string {
 	icon := r.status.Icon()
 	icon = st.Status[r.status].Render(icon) + strings.Repeat(" ", max(2-lipgloss.Width(icon), 0))
 	ref := "#" + strconv.Itoa(r.pr.Number)
-	if r.showRepo {
-		ref = r.pr.Repo.FullName() + ref
+	indent := "    "
+	if r.pr.ID == l.opened {
+		indent = "  " + st.Title.Render("●") + " "
 	}
-	left := strings.Repeat(" ", r.indent) + icon + " " + st.Status[r.status].Render(ref) + " " + r.pr.Title
+	left := indent + icon + " " + st.Status[r.status].Render(ref) + " " + r.pr.Title
 	right := st.Muted.Render(r.pr.Author.Login + " " + age(l.now().Sub(r.pr.CreatedAt)))
 	room := width - lipgloss.Width(right) - 1
 	if room < lipgloss.Width(left) {
@@ -446,12 +470,12 @@ func (m *Model) handleListKey(msg tea.KeyPressMsg) tea.Cmd {
 		l.jumpSection(1)
 	case "[":
 		l.jumpSection(-1)
+	case "enter", "space":
+		if pr, ok := l.Selected(); ok {
+			return m.openPR(pr)
+		}
 	case "/":
-		l.searching = true
-		l.input = ""
-		l.scroll()
-	case "n", "N":
-		return m.searchNext(s == "n")
+		return PushDialog(newFinder(l.finderEntries()))
 	case "a":
 		l.filters.HideApproved = !l.filters.HideApproved
 		m.filtersChanged()
@@ -465,49 +489,6 @@ func (m *Model) handleListKey(msg tea.KeyPressMsg) tea.Cmd {
 		return PushDialog(newAuthorPicker(l.authors(), l.filters.Author))
 	case "m":
 		return m.loadMore()
-	}
-	return nil
-}
-
-// handleSearchInput handles a key press while the user types the search
-// query. enter confirms the query and moves to the first match. esc
-// cancels.
-func (m *Model) handleSearchInput(msg tea.KeyPressMsg) tea.Cmd {
-	l := &m.list
-	switch msg.String() {
-	case "enter":
-		l.searching = false
-		l.scroll()
-		if l.input == "" {
-			return nil
-		}
-		l.query = l.input
-		return m.searchNext(true)
-	case "esc":
-		l.searching = false
-		l.input = ""
-		l.scroll()
-	case "backspace":
-		if r := []rune(l.input); len(r) > 0 {
-			l.input = string(r[:len(r)-1])
-		}
-	default:
-		l.input += msg.Text
-	}
-	return nil
-}
-
-func (m *Model) searchNext(forward bool) tea.Cmd {
-	l := &m.list
-	if l.query == "" {
-		return nil
-	}
-	dir := 1
-	if !forward {
-		dir = -1
-	}
-	if !l.findMatch(dir) {
-		return m.status.SetMessage("no match: " + l.query)
 	}
 	return nil
 }

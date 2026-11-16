@@ -147,7 +147,7 @@ func fullPR() model.PR {
 
 func TestDetailRenderRecordedPR(t *testing.T) {
 	m := newDetailModel(t, recordedClient(t, "detail_full.json"), fixedNow, detailSnapshot(fullPR()))
-	press(m, "j")
+	press(m, "j", "j", "enter")
 	got := detailText(m)
 	for _, want := range []string{
 		"Add retry to the uploader",
@@ -183,7 +183,7 @@ func TestDetailRenderRecordedPR(t *testing.T) {
 func TestDetailColors(t *testing.T) {
 	st := testStyles(t)
 	m := newDetailModel(t, recordedClient(t, "detail_full.json"), fixedNow, detailSnapshot(fullPR()))
-	press(m, "j")
+	press(m, "j", "j", "enter")
 	got := m.detail.view()
 	for _, want := range []string{
 		st.Status[model.StatusCIFailed].Render("✗"),
@@ -249,7 +249,8 @@ func TestDetailReviewsLine(t *testing.T) {
 
 func TestDetailNoSelection(t *testing.T) {
 	m := newDetailModel(t, &fakeDetailer{}, fixedNow, detailSnapshot(fullPR()))
-	if got := detailText(m); got != "No PR selected." {
+	press(m, "j", "j")
+	if got := detailText(m); got != "No PR open. Press enter on a PR in the list." {
 		t.Fatalf("detail = %q, want no selection", got)
 	}
 }
@@ -257,7 +258,8 @@ func TestDetailNoSelection(t *testing.T) {
 func TestDetailLoadingState(t *testing.T) {
 	m := newDetailModel(t, &fakeDetailer{}, fixedNow, detailSnapshot(fullPR()))
 	// Do not run the command, so the call does not return.
-	m.Update(key("j"))
+	press(m, "j", "j")
+	m.Update(key("enter"))
 	if got := detailText(m); got != "Loading acme/api#42…" {
 		t.Fatalf("detail = %q, want the loading state", got)
 	}
@@ -270,29 +272,57 @@ func TestDetailCacheHit(t *testing.T) {
 	clk := &clock{now: listNow}
 	m := newDetailModel(t, det, clk.Now, detailSnapshot(a, b))
 
-	press(m, "j", "j")
+	// Rows: section, group, A, B.
+	press(m, "j", "j", "enter", "j", "enter")
 	if n := det.callCount(); n != 2 {
 		t.Fatalf("calls = %d, want 2", n)
 	}
 	// Back to A inside the TTL: the cache serves it.
 	clk.now = clk.now.Add(20 * time.Second)
-	press(m, "k")
+	press(m, "k", "space")
 	if n := det.callCount(); n != 2 {
 		t.Fatalf("calls after a cache hit = %d, want 2", n)
 	}
 	if got := detailText(m); !strings.Contains(got, "First") {
 		t.Fatalf("detail does not show A:\n%s", got)
 	}
-	// Keys that keep the selection send no call.
+	// Keys that keep the opened PR send no call.
 	press(m, "l", "j", "k", "h")
 	if n := det.callCount(); n != 2 {
-		t.Fatalf("calls after keys that keep the selection = %d, want 2", n)
+		t.Fatalf("calls after keys that keep the opened PR = %d, want 2", n)
 	}
 	// B was loaded 20 s ago; 11 s more makes it stale.
 	clk.now = clk.now.Add(11 * time.Second)
-	press(m, "j")
+	press(m, "j", "enter")
 	if got := det.calls; len(got) != 3 || got[2] != "B" {
 		t.Fatalf("calls = %v, want a new call for B", got)
+	}
+}
+
+func TestDetailCursorMoveSendsNoQuery(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	b := testPR("B", "acme/api", 2, "Second", "bob")
+	det := &fakeDetailer{prs: map[string]model.PR{"A": a, "B": b}}
+	m := newDetailModel(t, det, fixedNow, detailSnapshot(a, b))
+
+	press(m, "j", "j", "j", "k", "G", "g", "g", "ctrl+d", "ctrl+u")
+	if n := det.callCount(); n != 0 {
+		t.Fatalf("calls after cursor moves = %d, want 0", n)
+	}
+	// The opened PR stays in the detail pane while the cursor moves.
+	press(m, "j", "j", "enter", "j")
+	if pr, ok := m.Opened(); !ok || pr.ID != "A" || selectedID(t, m) != "B" {
+		t.Fatalf("opened %q %v, cursor on %s; want A open and the cursor on B", pr.ID, ok, selectedID(t, m))
+	}
+	if got := detailText(m); !strings.Contains(got, "First") || det.callCount() != 1 {
+		t.Fatalf("calls %d, detail:\n%s", det.callCount(), got)
+	}
+	if m.Focus() != FocusList {
+		t.Fatal("enter moved the focus")
+	}
+	// The list marks the opened row.
+	if got := rowText(m); !strings.HasPrefix(got[2], "● ") || strings.HasPrefix(got[3], "● ") {
+		t.Fatalf("rows:\n%s", strings.Join(got, "\n"))
 	}
 }
 
@@ -300,7 +330,7 @@ func TestDetailNewerSummaryReloads(t *testing.T) {
 	a := testPR("A", "acme/api", 1, "First", "alice")
 	det := &fakeDetailer{prs: map[string]model.PR{"A": a}}
 	m := newDetailModel(t, det, fixedNow, detailSnapshot(a))
-	press(m, "j")
+	press(m, "j", "j", "enter")
 
 	// A refresh with the same summary keeps the cache.
 	m.list.setSnapshot(detailSnapshot(a))
@@ -330,9 +360,9 @@ func TestDetailErrorState(t *testing.T) {
 	det.setErr("A", errors.New("PR detail acme/api#1: HTTP 502\nmore text"))
 	m := newDetailModel(t, det, fixedNow, detailSnapshot(a, b))
 
-	press(m, "j")
+	press(m, "j", "j", "enter")
 	got := detailText(m)
-	for _, want := range []string{"Cannot load acme/api#1", "HTTP 502", "Select the PR again to retry."} {
+	for _, want := range []string{"Cannot load acme/api#1", "HTTP 502", "Press enter on the PR to retry."} {
 		if !strings.Contains(got, want) {
 			t.Errorf("error state has no %q:\n%s", want, got)
 		}
@@ -341,15 +371,15 @@ func TestDetailErrorState(t *testing.T) {
 		t.Errorf("error state shows more than the first line:\n%s", got)
 	}
 	// Other messages do not repeat the failed call.
-	press(m, "l", "j", "h")
+	press(m, "l", "j", "h", "j", "k")
 	if n := det.callCount(); n != 1 {
 		t.Fatalf("calls = %d, want 1", n)
 	}
-	// A new selection retries; a success clears the error.
+	// A second open retries; a success clears the error.
 	det.setErr("A", nil)
-	press(m, "j", "k")
-	if n := det.callCount(); n != 3 {
-		t.Fatalf("calls = %d, want 3", n)
+	press(m, "enter")
+	if n := det.callCount(); n != 2 {
+		t.Fatalf("calls = %d, want 2", n)
 	}
 	if got := detailText(m); !strings.Contains(got, "First") || strings.Contains(got, "Cannot load") {
 		t.Fatalf("detail after the retry:\n%s", got)
@@ -370,7 +400,7 @@ func headerLine(t *testing.T, m *Model, s string) string {
 
 func TestDetailThreadFold(t *testing.T) {
 	m := newDetailModel(t, recordedClient(t, "detail_full.json"), fixedNow, detailSnapshot(fullPR()))
-	press(m, "j", "l")
+	press(m, "j", "j", "enter", "l")
 
 	// za without a current item does nothing.
 	press(m, "z", "a")
@@ -407,7 +437,7 @@ func TestDetailThreadFold(t *testing.T) {
 func TestDetailThreadNavigation(t *testing.T) {
 	m := newDetailModel(t, recordedClient(t, "detail_full.json"), fixedNow, detailSnapshot(fullPR()))
 	m.Update(tea.WindowSizeMsg{Width: 160, Height: 12})
-	press(m, "j", "l")
+	press(m, "j", "j", "enter", "l")
 	d := &m.detail
 	d.layout()
 	if len(d.items) != 4 {
@@ -446,7 +476,7 @@ func TestDetailThreadNavigation(t *testing.T) {
 func TestDetailScroll(t *testing.T) {
 	m := newDetailModel(t, recordedClient(t, "detail_full.json"), fixedNow, detailSnapshot(fullPR()))
 	m.Update(tea.WindowSizeMsg{Width: 160, Height: 12})
-	press(m, "j", "l")
+	press(m, "j", "j", "enter", "l")
 	d := &m.detail
 	d.layout()
 	bottom := len(d.lines) - d.height
@@ -481,7 +511,7 @@ func TestDetailNewSelectionResetsView(t *testing.T) {
 	det := &fakeDetailer{prs: map[string]model.PR{"A": a, "B": b}}
 	m := newDetailModel(t, det, fixedNow, detailSnapshot(a, b))
 	m.Update(tea.WindowSizeMsg{Width: 160, Height: 10})
-	press(m, "j", "l", "]", "j", "h", "j")
+	press(m, "j", "j", "enter", "l", "]", "j", "h", "j", "enter")
 	if m.detail.cur != -1 || m.detail.offset != 0 {
 		t.Fatalf("after a new selection: cur %d offset %d, want -1 and 0", m.detail.cur, m.detail.offset)
 	}
@@ -494,7 +524,7 @@ func TestDetailFitsWidth(t *testing.T) {
 	pr.Comments = []model.Comment{{ID: "C1", Author: model.Actor{Login: "bob"}, Body: strings.Repeat("y", 300), CreatedAt: listNow}}
 	det := &fakeDetailer{prs: map[string]model.PR{"PR_full": pr}}
 	m := newDetailModel(t, det, fixedNow, detailSnapshot(fullPR()))
-	press(m, "j")
+	press(m, "j", "j", "enter")
 	for _, l := range strings.Split(m.detail.view(), "\n") {
 		if w := ansi.StringWidth(l); w > m.detail.width {
 			t.Fatalf("line width %d > %d: %q", w, m.detail.width, ansi.Strip(l))
@@ -513,6 +543,8 @@ func TestDetailTeatestFold(t *testing.T) {
 	p.ch <- poller.Update{Snapshot: detailSnapshot(fullPR())}
 	waitForText(t, tm, "Needs my review")
 	tm.Send(key("j"))
+	tm.Send(key("j"))
+	tm.Send(key("enter"))
 	waitForText(t, tm, "Retry the upload three times.", "upload/old.go")
 	for _, k := range []string{"l", "]", "]", "z", "a"} {
 		tm.Send(key(k))

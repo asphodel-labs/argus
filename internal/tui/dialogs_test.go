@@ -162,8 +162,8 @@ type actionEnv struct {
 	runner *fakeRunner
 }
 
-// newActionModel returns a model with pr in the list. The cursor is on pr
-// and its detail is loaded.
+// newActionModel returns a model with pr in the list. The cursor is on pr,
+// pr is open, and its detail is loaded.
 func newActionModel(t *testing.T, pr model.PR) *actionEnv {
 	t.Helper()
 	env := &actionEnv{
@@ -178,7 +178,7 @@ func newActionModel(t *testing.T, pr model.PR) *actionEnv {
 	})
 	drive(env.m, env.m.update(tea.WindowSizeMsg{Width: 160, Height: 60}))
 	env.m.list.setSnapshot(detailSnapshot(pr))
-	env.press("j")
+	env.press("j", "j", "enter")
 	return env
 }
 
@@ -296,7 +296,7 @@ func TestMergePlan(t *testing.T) {
 }
 
 // newActionProgram starts a teatest program with pr in the list, the
-// cursor on pr, and its detail loaded.
+// cursor on pr, pr open, and its detail loaded.
 func newActionProgram(t *testing.T, pr model.PR, gh *fakeGitHub, mem *fakeMemory) (*teatest.TestModel, *fakeDetailer) {
 	t.Helper()
 	p := newFakePoller()
@@ -308,6 +308,8 @@ func newActionProgram(t *testing.T, pr model.PR, gh *fakeGitHub, mem *fakeMemory
 	p.ch <- poller.Update{Snapshot: detailSnapshot(pr)}
 	waitForText(t, tm, "Needs my review")
 	tm.Send(key("j"))
+	tm.Send(key("j"))
+	tm.Send(key("enter"))
 	waitForText(t, tm, "Reviews:")
 	return tm, det
 }
@@ -519,25 +521,60 @@ func TestActionResultAfterDialogClosed(t *testing.T) {
 	}
 }
 
-func TestActionNeedsSelectionAndDetail(t *testing.T) {
-	env := newActionModel(t, actionPR())
-	env.press("k")
-	env.press("M")
-	if msg := env.m.Status().Message(); msg != "select a PR first" {
-		t.Fatalf("message %q", msg)
+func TestActionNeedsOpenedPRAndDetail(t *testing.T) {
+	env := &actionEnv{gh: &fakeGitHub{}, runner: &fakeRunner{}}
+	env.m = New(Options{GitHub: env.gh, Runner: env.runner, OpenCommand: "open-url", Styles: testStyles(t), Me: "me", Now: fixedNow})
+	env.m.list.setSnapshot(detailSnapshot(actionPR()))
+	// The cursor is on the PR, but no PR is open.
+	env.press("j", "j")
+	for _, k := range []string{"A", "M", "f", "F", "c", "r", "+", "x", "o"} {
+		env.press(k)
+		if msg := env.m.Status().Message(); msg != "open a PR with enter" {
+			t.Fatalf("%s: message %q", k, msg)
+		}
+	}
+	if env.m.Dialogs() != 0 || len(env.gh.Calls()) != 0 || len(env.runner.calls) != 0 {
+		t.Fatal("an action key without an opened PR did something")
 	}
 
-	// A PR without a loaded detail.
-	pr := actionPR()
-	env.det.setErr(pr.ID, errors.New("down"))
-	env.m.detail.cache = map[string]detailEntry{}
-	env.press("j", "M")
+	// An opened PR without a loaded detail.
+	env.press("enter", "M")
 	if msg := env.m.Status().Message(); msg != "the PR detail is not loaded yet" {
 		t.Fatalf("message %q", msg)
 	}
 	if env.m.Dialogs() != 0 {
 		t.Fatal("merge dialog opened without a detail")
 	}
+}
+
+func TestActionKeysUseOpenedPR(t *testing.T) {
+	a := actionPR()
+	b := testPR("PR_2", "acme/api", 8, "Other change", "carol")
+	b.URL = "https://github.com/acme/api/pull/8"
+	env := &actionEnv{
+		gh:     &fakeGitHub{},
+		det:    &fakeDetailer{prs: map[string]model.PR{a.ID: a, b.ID: b}},
+		runner: &fakeRunner{},
+	}
+	env.m = New(Options{
+		Detail: env.det, GitHub: env.gh, Runner: env.runner, OpenCommand: "open-url",
+		Styles: testStyles(t), Me: "me", Now: fixedNow,
+	})
+	drive(env.m, env.m.update(tea.WindowSizeMsg{Width: 160, Height: 60}))
+	env.m.list.setSnapshot(detailSnapshot(a, b))
+	// Rows: section, group, PR_1, PR_2. Open PR_1, then move to PR_2.
+	env.press("j", "j", "enter", "j")
+	if selectedID(t, env.m) != "PR_2" {
+		t.Fatal("setup: the cursor is not on PR_2")
+	}
+	env.press("o")
+	if len(env.runner.calls) != 1 || env.runner.calls[0][1] != a.URL {
+		t.Fatalf("runner calls %q, want the URL of PR_1", env.runner.calls)
+	}
+	env.press("A")
+	env.typeText("ok")
+	env.send(ctrlS)
+	wantCalls(t, env.gh.Calls(), "Approve PR_1 ok")
 }
 
 func TestRerun(t *testing.T) {
@@ -687,7 +724,7 @@ func TestOpenBrowser(t *testing.T) {
 func TestActionsWithoutGitHub(t *testing.T) {
 	env := &actionEnv{m: New(Options{Styles: testStyles(t), Me: "me", Now: fixedNow})}
 	env.m.list.setSnapshot(detailSnapshot(actionPR()))
-	env.press("j", "A")
+	env.press("j", "j", "enter", "A")
 	if msg := env.m.Status().Message(); msg != "GitHub actions are not available" {
 		t.Fatalf("message %q", msg)
 	}
