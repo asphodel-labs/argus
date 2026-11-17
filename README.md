@@ -66,6 +66,9 @@ bot_logins = ["renovate-bot"]
 [repos]
 "acme/api" = "~/work/api"
 
+[owners]
+"globex" = "~/sources/globex"   # clones at ~/sources/globex/<repo>
+
 [colors]
 approved = "2"
 ```
@@ -78,7 +81,8 @@ approved = "2"
 | `min_refresh_gap` | `5m` | The minimum time between two full refreshes that new GitHub notifications start. |
 | `repo_root` | `~/sources` | argus looks for a clone at `<repo_root>/<owner>/<repo>`. |
 | `bot_logins` | empty | Logins that the `b` filter treats as bots. |
-| `[repos]` | empty | The clone path for a repo, if it is not under `repo_root`. |
+| `[repos]` | empty | The clone path for one repo, if it is not under `repo_root`. |
+| `[owners]` | empty | A root directory for all repos of one owner. argus looks for a clone at `<dir>/<repo>`. The owner name ignores case. |
 | `[colors]` | ANSI colors | Color overrides. |
 
 `refresh_interval` and `min_refresh_gap` use Go duration syntax, for example `90s` or `10m`. The value must be positive.
@@ -198,8 +202,8 @@ On the first run, argus records the state and sends no notifications.
 
 `v` and `p` need a local clone of the repository.
 
-1. argus finds the clone. It uses the `[repos]` path first, then `<repo_root>/<owner>/<repo>`.
-2. If no clone exists, argus asks before it runs `gh repo clone`.
+1. argus finds the clone. It uses the `[repos]` path first, then the `[owners]` path `<dir>/<repo>`, then `<repo_root>/<owner>/<repo>`.
+2. If no clone exists, argus asks before it runs `gh repo clone`. The clone goes to the first of these paths that the config sets.
 3. argus fetches the PR head and the base branch.
 4. argus makes a detached worktree at `<clone>/.worktrees/argus-pr-<n>`. It moves an existing worktree to the new head only if the tree is clean. If the tree has changes, argus keeps the old commit and shows a warning.
 5. Before the first worktree, argus adds `.worktrees/` to the `info/exclude` file of the clone. An error there shows a warning only.

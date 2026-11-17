@@ -30,8 +30,12 @@ type Worktrees struct {
 	Runner execx.Runner
 	// RepoRoot is the root of the clone lookup: <RepoRoot>/<owner>/<repo>.
 	RepoRoot string
-	// Repos maps "owner/repo" to a clone directory. It overrides RepoRoot.
+	// Repos maps "owner/repo" to a clone directory. It overrides Owners and
+	// RepoRoot.
 	Repos map[string]string
+	// Owners maps an owner to a root directory: <dir>/<repo>. It overrides
+	// RepoRoot.
+	Owners map[string]string
 }
 
 // MissingClone is the error of a repository that has no local clone. The
@@ -62,29 +66,38 @@ type Worktree struct {
 }
 
 // cloneDir returns the clone directory of repo and whether a clone exists
-// there. It tries the Repos override first, then RepoRoot. With no clone,
-// dir is the override if one is set, else the RepoRoot path.
+// there. It tries the Repos override first, then the Owners root, then
+// RepoRoot. With no clone, dir is the first of these paths that the config
+// sets.
 func (w *Worktrees) cloneDir(repo model.Repo) (dir string, ok bool) {
-	full := repo.FullName()
-	override := w.Repos[full]
-	if override == "" {
-		for name, d := range w.Repos {
-			if strings.EqualFold(name, full) {
-				override = d
-				break
-			}
-		}
+	var candidates []string
+	if d := lookupFold(w.Repos, repo.FullName()); d != "" {
+		candidates = append(candidates, d)
 	}
-	rootDir := filepath.Join(w.RepoRoot, repo.Owner, repo.Name)
-	for _, d := range []string{override, rootDir} {
-		if d != "" && isClone(d) {
+	if d := lookupFold(w.Owners, repo.Owner); d != "" {
+		candidates = append(candidates, filepath.Join(d, repo.Name))
+	}
+	candidates = append(candidates, filepath.Join(w.RepoRoot, repo.Owner, repo.Name))
+	for _, d := range candidates {
+		if isClone(d) {
 			return d, true
 		}
 	}
-	if override != "" {
-		return override, false
+	return candidates[0], false
+}
+
+// lookupFold returns m[key]. If m has no exact key, it returns the value of
+// the first key that equals key without case. GitHub names ignore case.
+func lookupFold(m map[string]string, key string) string {
+	if v := m[key]; v != "" {
+		return v
 	}
-	return rootDir, false
+	for k, v := range m {
+		if strings.EqualFold(k, key) {
+			return v
+		}
+	}
+	return ""
 }
 
 // isClone reports whether dir holds a .git directory or file.
@@ -299,8 +312,8 @@ type cloneRef struct {
 	repo model.Repo
 }
 
-// clonesWithWorktrees returns the clones from Repos and from
-// <RepoRoot>/<owner>/<repo> that have a .worktrees directory.
+// clonesWithWorktrees returns the clones from Repos, from <Owners dir>/<repo>
+// and from <RepoRoot>/<owner>/<repo> that have a .worktrees directory.
 func (w *Worktrees) clonesWithWorktrees() []cloneRef {
 	var out []cloneRef
 	seen := map[string]bool{}
@@ -319,6 +332,16 @@ func (w *Worktrees) clonesWithWorktrees() []cloneRef {
 		owner, repo, ok := strings.Cut(name, "/")
 		if ok && owner != "" && repo != "" {
 			add(dir, model.Repo{Owner: owner, Name: repo})
+		}
+	}
+	for owner, root := range w.Owners {
+		if owner == "" || root == "" {
+			continue
+		}
+		matches, _ := filepath.Glob(filepath.Join(root, "*", worktreesDir))
+		for _, m := range matches {
+			dir := filepath.Dir(m)
+			add(dir, model.Repo{Owner: owner, Name: filepath.Base(dir)})
 		}
 	}
 	if w.RepoRoot != "" {

@@ -81,29 +81,41 @@ func TestFindClone(t *testing.T) {
 	root := t.TempDir()
 	override := filepath.Join(t.TempDir(), "work-api")
 	rootClone := filepath.Join(root, "acme", "api")
+	ownerRoot := t.TempDir()
+	ownerClone := filepath.Join(ownerRoot, "api")
+	acmeRoot := map[string]string{"acme": ownerRoot}
 
 	tests := []struct {
 		name     string
 		repos    map[string]string
+		owners   map[string]string
 		clones   []string
 		wantDir  string
 		wantMiss bool
 	}{
-		{"override clone", map[string]string{"acme/api": override}, []string{override, rootClone}, override, false},
-		{"override in other case", map[string]string{"ACME/API": override}, []string{override}, override, false},
-		{"override missing, root clone", map[string]string{"acme/api": override}, []string{rootClone}, rootClone, false},
-		{"no clone, override target", map[string]string{"acme/api": override}, nil, override, true},
-		{"no clone, root target", nil, nil, rootClone, true},
-		{"root clone", nil, []string{rootClone}, rootClone, false},
+		{"override clone", map[string]string{"acme/api": override}, nil, []string{override, rootClone}, override, false},
+		{"override in other case", map[string]string{"ACME/API": override}, nil, []string{override}, override, false},
+		{"override missing, root clone", map[string]string{"acme/api": override}, nil, []string{rootClone}, rootClone, false},
+		{"no clone, override target", map[string]string{"acme/api": override}, nil, nil, override, true},
+		{"no clone, root target", nil, nil, nil, rootClone, true},
+		{"root clone", nil, nil, []string{rootClone}, rootClone, false},
+		{"owner clone", nil, acmeRoot, []string{ownerClone, rootClone}, ownerClone, false},
+		{"owner in other case", nil, map[string]string{"ACME": ownerRoot}, []string{ownerClone}, ownerClone, false},
+		{"override wins over owner", map[string]string{"acme/api": override}, acmeRoot, []string{override, ownerClone}, override, false},
+		{"owner missing, root clone", nil, acmeRoot, []string{rootClone}, rootClone, false},
+		{"no clone, owner target", nil, acmeRoot, nil, ownerClone, true},
+		{"no clone, override target over owner", map[string]string{"acme/api": override}, acmeRoot, nil, override, true},
+		{"other owner, root target", nil, map[string]string{"globex": ownerRoot}, nil, rootClone, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			os.RemoveAll(override)
 			os.RemoveAll(rootClone)
+			os.RemoveAll(ownerClone)
 			for _, c := range tt.clones {
 				makeClone(t, c)
 			}
-			w := &Worktrees{Runner: &fakeRunner{}, RepoRoot: root, Repos: tt.repos}
+			w := &Worktrees{Runner: &fakeRunner{}, RepoRoot: root, Repos: tt.repos, Owners: tt.owners}
 			dir, err := w.FindClone(apiRepo)
 			var miss *MissingClone
 			if tt.wantMiss {
@@ -462,6 +474,25 @@ func TestCleanupOverrideClone(t *testing.T) {
 	r.set("git -C "+clone+" worktree list --porcelain", reply{stdout: "worktree " + wt + "\n"})
 	states := &fakeStates{states: map[gh.PRRef]gh.PRState{ref(9): gh.PRStateMerged}}
 	w := &Worktrees{Runner: r, RepoRoot: root, Repos: map[string]string{"acme/api": clone}}
+	res, err := w.Cleanup(context.Background(), states)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(res.Removed, []string{wt}) {
+		t.Fatalf("removed = %q, calls %q", res.Removed, r.calls)
+	}
+}
+
+func TestCleanupOwnerRootClone(t *testing.T) {
+	ownerRoot := t.TempDir()
+	clone := makeClone(t, filepath.Join(ownerRoot, "api"))
+	mkdir(t, filepath.Join(clone, ".worktrees"))
+	wt := filepath.Join(clone, ".worktrees", "argus-pr-9")
+	r := &fakeRunner{}
+	r.set("git -C "+clone+" worktree list --porcelain", reply{stdout: "worktree " + wt + "\n"})
+	// The state lookup uses the owner from the config key, not from the path.
+	states := &fakeStates{states: map[gh.PRRef]gh.PRState{ref(9): gh.PRStateMerged}}
+	w := &Worktrees{Runner: r, RepoRoot: t.TempDir(), Owners: map[string]string{"acme": ownerRoot}}
 	res, err := w.Cleanup(context.Background(), states)
 	if err != nil {
 		t.Fatal(err)

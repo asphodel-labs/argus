@@ -40,7 +40,7 @@ func TestLoadMissingFileGivesDefaults(t *testing.T) {
 	if cfg.User != "" || len(cfg.Orgs) != 0 || len(cfg.BotLogins) != 0 {
 		t.Errorf("unexpected values: %+v", cfg)
 	}
-	if cfg.Repos == nil || cfg.Colors == nil {
+	if cfg.Repos == nil || cfg.Owners == nil || cfg.Colors == nil {
 		t.Errorf("maps must not be nil: %+v", cfg)
 	}
 }
@@ -71,6 +71,9 @@ bot_logins = ["renovate-bot"]
 "acme/api" = "~/work/api"
 "acme/web" = "/opt/web"
 
+[owners]
+"globex" = "~/sources/globex"
+
 [colors]
 approved = "2"
 failed = "#ff0000"
@@ -91,6 +94,7 @@ failed = "#ff0000"
 			"acme/api": filepath.Join(home, "work", "api"),
 			"acme/web": "/opt/web",
 		},
+		Owners: map[string]string{"globex": filepath.Join(home, "sources", "globex")},
 		Colors: map[string]string{"approved": "2", "failed": "#ff0000"},
 	}
 	if !reflect.DeepEqual(cfg, want) {

@@ -34,7 +34,10 @@ type Config struct {
 	RepoRoot      string
 	BotLogins     []string
 	Repos         map[string]string
-	Colors        map[string]string
+	// Owners maps an owner to a root directory. The clone of a repository
+	// of that owner is at <dir>/<repo>.
+	Owners map[string]string
+	Colors map[string]string
 }
 
 type fileConfig struct {
@@ -45,6 +48,7 @@ type fileConfig struct {
 	RepoRoot        string            `toml:"repo_root"`
 	BotLogins       []string          `toml:"bot_logins"`
 	Repos           map[string]string `toml:"repos"`
+	Owners          map[string]string `toml:"owners"`
 	Colors          map[string]string `toml:"colors"`
 }
 
@@ -85,6 +89,7 @@ func Load(path string) (*Config, error) {
 		RepoRoot:        expandHome(DefaultRepoRoot, home),
 		BotLogins:       fc.BotLogins,
 		Repos:           map[string]string{},
+		Owners:          map[string]string{},
 		Colors:          map[string]string{},
 	}
 	if err := parseDuration("refresh_interval", fc.RefreshInterval, &cfg.RefreshInterval); err != nil {
@@ -98,6 +103,9 @@ func Load(path string) (*Config, error) {
 	}
 	for repo, dir := range fc.Repos {
 		cfg.Repos[repo] = expandHome(dir, home)
+	}
+	for owner, dir := range fc.Owners {
+		cfg.Owners[owner] = expandHome(dir, home)
 	}
 	for name, color := range fc.Colors {
 		cfg.Colors[name] = color
