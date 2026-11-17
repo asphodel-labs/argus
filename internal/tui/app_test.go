@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"sync"
 	"testing"
@@ -116,8 +117,11 @@ func key(s string) tea.KeyPressMsg {
 func waitForText(t *testing.T, tm *teatest.TestModel, texts ...string) {
 	t.Helper()
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		// The renderer can put escape codes inside a text, for example the
+		// insert mode codes when it changes part of a line.
+		plain := []byte(ansi.Strip(string(out)))
 		for _, s := range texts {
-			if !bytes.Contains(out, []byte(s)) {
+			if !bytes.Contains(plain, []byte(s)) {
 				return false
 			}
 		}
