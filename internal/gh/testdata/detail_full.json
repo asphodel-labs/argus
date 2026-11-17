@@ -1,0 +1,98 @@
+{
+  "data": {
+    "repository": {
+      "mergeCommitAllowed": false,
+      "squashMergeAllowed": true,
+      "rebaseMergeAllowed": true,
+      "deleteBranchOnMerge": true,
+      "pullRequest": {
+        "id": "PR_full",
+        "number": 42,
+        "title": "Add retry to the uploader",
+        "url": "https://github.com/acme/api/pull/42",
+        "state": "OPEN",
+        "body": "Retry the upload three times.\n\n## Notes\nNo API change.",
+        "isDraft": false,
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "BLOCKED",
+        "reviewDecision": "CHANGES_REQUESTED",
+        "createdAt": "2026-11-10T08:00:00Z",
+        "updatedAt": "2026-11-15T12:00:00Z",
+        "headRefOid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "baseRefName": "main",
+        "repository": {"name": "api", "owner": {"login": "acme"}},
+        "author": {"__typename": "User", "login": "alice"},
+        "commits": {"nodes": [{"commit": {"statusCheckRollup": {
+          "state": "FAILURE",
+          "contexts": {"nodes": [
+            {
+              "__typename": "CheckRun",
+              "name": "test",
+              "status": "COMPLETED",
+              "conclusion": "FAILURE",
+              "detailsUrl": "https://github.com/acme/api/actions/runs/1001/job/5001",
+              "checkSuite": {"app": {"slug": "github-actions"}, "workflowRun": {"databaseId": 1001}}
+            },
+            {
+              "__typename": "CheckRun",
+              "name": "lint",
+              "status": "IN_PROGRESS",
+              "conclusion": null,
+              "detailsUrl": "https://github.com/acme/api/actions/runs/1002/job/5002",
+              "checkSuite": {"app": {"slug": "github-actions"}, "workflowRun": {"databaseId": 1002}}
+            }
+          ]}
+        }}}]},
+        "reviews": {"totalCount": 2, "nodes": [
+          {"id": "PRR_1", "author": {"__typename": "User", "login": "bob"}, "state": "CHANGES_REQUESTED", "body": "Please add a test.", "submittedAt": "2026-11-12T10:00:00Z"},
+          {"id": "PRR_2", "author": {"__typename": "User", "login": "me"}, "state": "PENDING", "body": "", "submittedAt": null}
+        ]},
+        "reviewThreads": {"totalCount": 2, "nodes": [
+          {
+            "id": "PRRT_1",
+            "path": "upload/retry.go",
+            "line": 17,
+            "isResolved": false,
+            "comments": {"nodes": [
+              {
+                "id": "PRRC_1",
+                "author": {"__typename": "User", "login": "bob"},
+                "body": "Why three?",
+                "createdAt": "2026-11-12T10:00:00Z",
+                "reactionGroups": [
+                  {"content": "THUMBS_UP", "viewerHasReacted": true, "reactors": {"totalCount": 2}},
+                  {"content": "HEART", "viewerHasReacted": false, "reactors": {"totalCount": 0}}
+                ]
+              },
+              {
+                "id": "PRRC_2",
+                "author": {"__typename": "User", "login": "alice"},
+                "body": "It matches the server limit.",
+                "createdAt": "2026-11-13T10:00:00Z",
+                "reactionGroups": []
+              }
+            ]}
+          },
+          {
+            "id": "PRRT_2",
+            "path": "upload/old.go",
+            "line": null,
+            "isResolved": true,
+            "comments": {"nodes": [
+              {"id": "PRRC_3", "author": null, "body": "Outdated note.", "createdAt": "2026-11-11T10:00:00Z", "reactionGroups": []}
+            ]}
+          }
+        ]},
+        "comments": {"totalCount": 1, "nodes": [
+          {
+            "id": "IC_1",
+            "author": {"__typename": "Bot", "login": "renovate-bot"},
+            "body": "Bot comment.",
+            "createdAt": "2026-11-10T09:00:00Z",
+            "reactionGroups": [{"content": "ROCKET", "viewerHasReacted": false, "reactors": {"totalCount": 1}}]
+          }
+        ]}
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "data": {
+    "pr0": {"pullRequest": {"state": "MERGED"}},
+    "pr1": {"pullRequest": {"state": "OPEN"}},
+    "pr2": {"pullRequest": null},
+    "pr3": null,
+    "pr4": {"pullRequest": {"state": "CLOSED"}}
+  },
+  "errors": [
+    {"type": "NOT_FOUND", "path": ["pr2", "pullRequest"], "message": "Could not resolve to a PullRequest with the number of 9999."},
+    {"type": "NOT_FOUND", "path": ["pr3"], "message": "Could not resolve to a Repository with the name 'gone/repo'."}
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "data": {"pr0": null},
+  "errors": [{"type": "FORBIDDEN", "path": ["pr0"], "message": "Resource not accessible by integration"}]
+}

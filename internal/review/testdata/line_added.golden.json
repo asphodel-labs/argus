@@ -1,0 +1,10 @@
+[
+  {
+    "Path": "handler.go",
+    "Body": "use errors.Is() instead of direct comparison",
+    "Line": 43,
+    "StartLine": 0,
+    "Side": "RIGHT",
+    "File": false
+  }
+]

@@ -1,0 +1,10 @@
+[
+  {
+    "Path": "store.go",
+    "Body": "don't remove this validation",
+    "Line": 18,
+    "StartLine": 0,
+    "Side": "LEFT",
+    "File": false
+  }
+]

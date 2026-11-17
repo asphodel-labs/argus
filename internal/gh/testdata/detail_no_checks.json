@@ -1,0 +1,31 @@
+{
+  "data": {
+    "repository": {
+      "mergeCommitAllowed": true,
+      "squashMergeAllowed": false,
+      "rebaseMergeAllowed": false,
+      "deleteBranchOnMerge": false,
+      "pullRequest": {
+        "id": "PR_nochecks",
+        "number": 7,
+        "title": "Update README",
+        "url": "https://github.com/dave/tools/pull/7",
+        "body": "",
+        "isDraft": true,
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "DRAFT",
+        "reviewDecision": null,
+        "createdAt": "2026-11-14T08:00:00Z",
+        "updatedAt": "2026-11-14T08:00:00Z",
+        "headRefOid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseRefName": "main",
+        "repository": {"name": "tools", "owner": {"login": "dave"}},
+        "author": {"__typename": "User", "login": "dave"},
+        "commits": {"nodes": [{"commit": {"statusCheckRollup": null}}]},
+        "reviews": {"totalCount": 0, "nodes": []},
+        "reviewThreads": {"totalCount": 0, "nodes": []},
+        "comments": {"totalCount": 0, "nodes": []}
+      }
+    }
+  }
+}

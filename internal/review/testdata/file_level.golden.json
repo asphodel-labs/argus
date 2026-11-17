@@ -1,0 +1,10 @@
+[
+  {
+    "Path": "handler.go",
+    "Body": "consider splitting this file into smaller modules",
+    "Line": 0,
+    "StartLine": 0,
+    "Side": "",
+    "File": true
+  }
+]
