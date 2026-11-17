@@ -72,6 +72,9 @@ func DefaultKeyMap() KeyMap {
 		Actions: []Binding{
 			{Keys: []string{"A"}, Desc: "approve"},
 			{Keys: []string{"M"}, Desc: "merge"},
+			{Keys: []string{"U"}, Desc: "update branch"},
+			{Keys: []string{"R"}, Desc: "request review"},
+			{Keys: []string{"@"}, Desc: "assign"},
 			{Keys: []string{"f", "F"}, Desc: "rerun failed / all"},
 			{Keys: []string{"c"}, Desc: "comment"},
 			{Keys: []string{"r"}, Desc: "reply"},

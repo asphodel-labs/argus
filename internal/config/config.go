@@ -21,6 +21,15 @@ const (
 	DefaultRefreshInterval = 10 * time.Minute
 	DefaultMinRefreshGap   = 5 * time.Minute
 	DefaultRepoRoot        = "~/sources"
+	DefaultCloneProtocol   = CloneSSH
+)
+
+// Clone protocols for the clone_protocol key.
+const (
+	// CloneSSH clones with `git clone git@github.com:<owner>/<repo>.git`.
+	CloneSSH = "ssh"
+	// CloneHTTPS clones with `gh repo clone`.
+	CloneHTTPS = "https"
 )
 
 // Config is the parsed config file.
@@ -32,6 +41,8 @@ type Config struct {
 	// new notifications start.
 	MinRefreshGap time.Duration
 	RepoRoot      string
+	// CloneProtocol is CloneSSH or CloneHTTPS.
+	CloneProtocol string
 	BotLogins     []string
 	Repos         map[string]string
 	// Owners maps an owner to a root directory. The clone of a repository
@@ -46,6 +57,7 @@ type fileConfig struct {
 	RefreshInterval string            `toml:"refresh_interval"`
 	MinRefreshGap   string            `toml:"min_refresh_gap"`
 	RepoRoot        string            `toml:"repo_root"`
+	CloneProtocol   string            `toml:"clone_protocol"`
 	BotLogins       []string          `toml:"bot_logins"`
 	Repos           map[string]string `toml:"repos"`
 	Owners          map[string]string `toml:"owners"`
@@ -87,6 +99,7 @@ func Load(path string) (*Config, error) {
 		RefreshInterval: DefaultRefreshInterval,
 		MinRefreshGap:   DefaultMinRefreshGap,
 		RepoRoot:        expandHome(DefaultRepoRoot, home),
+		CloneProtocol:   DefaultCloneProtocol,
 		BotLogins:       fc.BotLogins,
 		Repos:           map[string]string{},
 		Owners:          map[string]string{},
@@ -97,6 +110,13 @@ func Load(path string) (*Config, error) {
 	}
 	if err := parseDuration("min_refresh_gap", fc.MinRefreshGap, &cfg.MinRefreshGap); err != nil {
 		return nil, err
+	}
+	switch fc.CloneProtocol {
+	case "":
+	case CloneSSH, CloneHTTPS:
+		cfg.CloneProtocol = fc.CloneProtocol
+	default:
+		return nil, fmt.Errorf("clone_protocol %q must be %q or %q", fc.CloneProtocol, CloneSSH, CloneHTTPS)
 	}
 	if fc.RepoRoot != "" {
 		cfg.RepoRoot = expandHome(fc.RepoRoot, home)

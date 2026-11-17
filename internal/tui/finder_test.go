@@ -164,7 +164,8 @@ func TestFinderTeatest(t *testing.T) {
 	for _, k := range []string{"#", "2", "3"} {
 		tm.Send(key(k))
 	}
-	waitForText(t, tm, "#23█")
+	// The renderer redraws only the changed cells, so "#23█" can arrive in
+	// two frames. The model gets the keys in order, so enter needs no wait.
 	tm.Send(key("enter"))
 	// The list marks the opened row.
 	waitForText(t, tm, "●")

@@ -61,6 +61,7 @@ user = ""                 # empty: argus reads the login from `gh api user`
 refresh_interval = "10m"
 min_refresh_gap = "5m"
 repo_root = "~/sources"
+clone_protocol = "ssh"
 bot_logins = ["renovate-bot"]
 
 [repos]
@@ -80,6 +81,7 @@ approved = "2"
 | `refresh_interval` | `10m` | The time between two scheduled full refreshes. |
 | `min_refresh_gap` | `5m` | The minimum time between two full refreshes that new GitHub notifications start. |
 | `repo_root` | `~/sources` | argus looks for a clone at `<repo_root>/<owner>/<repo>`. |
+| `clone_protocol` | `ssh` | How argus clones a missing repo. `ssh` runs `git clone git@github.com:<owner>/<repo>.git`. `https` runs `gh repo clone`, which uses the `git_protocol` setting of `gh`. |
 | `bot_logins` | empty | Logins that the `b` filter treats as bots. |
 | `[repos]` | empty | The clone path for one repo, if it is not under `repo_root`. |
 | `[owners]` | empty | A root directory for all repos of one owner. argus looks for a clone at `<dir>/<repo>`. The owner name ignores case. |
@@ -170,6 +172,9 @@ With no opened PR, they show "open a PR with enter".
 |---|---|
 | `A` | Approve. |
 | `M` | Merge. The dialog keeps the last merge method for each repo. If branch protection blocks the merge and the checks are pending, the dialog enables auto-merge. |
+| `U` | Update the branch. Merge the base branch into the head branch, or rebase the head branch on the base branch. |
+| `R` | Request a review. Type to filter the users, `space` checks a user, and `enter` sends. The requested teams and bots stay. |
+| `@` | Assign users. The user list works as for `R`. |
 | `f` / `F` | Rerun the failed checks / all checks. |
 | `c` | Comment. |
 | `r` | Reply to a thread. |
@@ -213,7 +218,7 @@ On the first run, argus records the state and sends no notifications.
 `v` and `p` need a local clone of the repository.
 
 1. argus finds the clone. It uses the `[repos]` path first, then the `[owners]` path `<dir>/<repo>`, then `<repo_root>/<owner>/<repo>`.
-2. If no clone exists, argus asks before it runs `gh repo clone`. The clone goes to the first of these paths that the config sets.
+2. If no clone exists, argus asks before it clones the repo. The `clone_protocol` key selects `git clone` over SSH or `gh repo clone`. The clone goes to the first of these paths that the config sets.
 3. argus fetches the PR head and the base branch.
 4. argus makes a detached worktree at `<clone>/.worktrees/argus-pr-<n>`. It moves an existing worktree to the new head only if the tree is clean. If the tree has changes, argus keeps the old commit and shows a warning.
 5. Before the first worktree, argus adds `.worktrees/` to the `info/exclude` file of the clone. An error there shows a warning only.

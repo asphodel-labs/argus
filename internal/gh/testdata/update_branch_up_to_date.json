@@ -1,0 +1,4 @@
+{
+  "data": {"updatePullRequestBranch": null},
+  "errors": [{"type": "UNPROCESSABLE", "path": ["updatePullRequestBranch"], "locations": [{"line": 2, "column": 3}], "message": "There are no new commits on the base branch."}]
+}

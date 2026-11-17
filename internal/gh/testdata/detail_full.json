@@ -91,6 +91,17 @@
             "createdAt": "2026-11-10T09:00:00Z",
             "reactionGroups": [{"content": "ROCKET", "viewerHasReacted": false, "reactors": {"totalCount": 1}}]
           }
+        ]},
+        "reviewRequests": {"nodes": [
+          {"requestedReviewer": {"__typename": "User", "id": "U_carol", "login": "carol", "name": "Carol King"}},
+          {"requestedReviewer": {"__typename": "Team", "id": "T_core", "combinedSlug": "acme/core", "name": "Core"}},
+          {"requestedReviewer": {"__typename": "Bot", "id": "BOT_copilot", "login": "copilot"}},
+          {"requestedReviewer": {"__typename": "Mannequin"}},
+          {"requestedReviewer": null}
+        ]},
+        "assignees": {"nodes": [
+          {"id": "U_alice", "login": "alice", "name": "Alice Smith"},
+          {"id": "U_dave", "login": "dave", "name": null}
         ]}
       }
     }

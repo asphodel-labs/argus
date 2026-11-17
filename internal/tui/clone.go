@@ -21,8 +21,8 @@ type Cloner interface {
 // returns a *review.MissingClone error.
 type CloneNeededMsg struct{ Missing *review.MissingClone }
 
-// handleCloneNeeded opens the clone prompt. Only a confirm runs
-// `gh repo clone`.
+// handleCloneNeeded opens the clone prompt. Only a confirm clones the
+// repository.
 func (m *Model) handleCloneNeeded(msg CloneNeededMsg) tea.Cmd {
 	if m.cloner == nil {
 		return m.status.SetMessage("no clone of " + msg.Missing.Repo)
@@ -73,7 +73,7 @@ func (d *cloneDialog) View(width int) string {
 	width = max(width, 10)
 	lines := []string{
 		ansi.Wrap("No local clone of "+d.missing.Repo+".", width, ""),
-		ansi.Wrap("Clone it into "+d.missing.Dir+" with gh repo clone?", width, ""),
+		ansi.Wrap("Clone it into "+d.missing.Dir+"?", width, ""),
 		"",
 	}
 	if d.err != nil {

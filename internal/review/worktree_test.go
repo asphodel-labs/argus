@@ -134,9 +134,24 @@ func TestFindClone(t *testing.T) {
 	}
 }
 
-func TestClone(t *testing.T) {
+func TestCloneSSH(t *testing.T) {
 	r := &fakeRunner{}
 	w := &Worktrees{Runner: r}
+	if err := w.Clone(context.Background(), &MissingClone{Repo: "acme/api", Dir: "/src/acme/api"}); err != nil {
+		t.Fatal(err)
+	}
+	wantCalls(t, r.calls, "git clone git@github.com:acme/api.git /src/acme/api")
+
+	r.set("git clone git@github.com:acme/api.git /src/acme/api", reply{code: 128, stderr: "Permission denied (publickey)\n"})
+	err := w.Clone(context.Background(), &MissingClone{Repo: "acme/api", Dir: "/src/acme/api"})
+	if err == nil || !strings.Contains(err.Error(), "publickey") {
+		t.Fatalf("err = %v, want the stderr text", err)
+	}
+}
+
+func TestCloneHTTPS(t *testing.T) {
+	r := &fakeRunner{}
+	w := &Worktrees{Runner: r, HTTPS: true}
 	if err := w.Clone(context.Background(), &MissingClone{Repo: "acme/api", Dir: "/src/acme/api"}); err != nil {
 		t.Fatal(err)
 	}

@@ -25,6 +25,8 @@ const (
 	detailThreads        = 100
 	detailThreadComments = 50
 	detailComments       = 100
+	detailReviewRequests = 50
+	detailAssignees      = 50
 )
 
 var detailQuery = fmt.Sprintf(`query PRDetail($owner: String!, $repo: String!, $number: Int!) {
@@ -95,6 +97,17 @@ var detailQuery = fmt.Sprintf(`query PRDetail($owner: String!, $repo: String!, $
         totalCount
         nodes { ...CommentFields }
       }
+      reviewRequests(first: %d) {
+        nodes {
+          requestedReviewer {
+            __typename
+            ... on User { id login name }
+            ... on Team { id combinedSlug name }
+            ... on Bot { id login }
+          }
+        }
+      }
+      assignees(first: %d) { nodes { id login name } }
     }
   }
 }
@@ -105,7 +118,8 @@ fragment CommentFields on Comment {
   body
   createdAt
   ... on Reactable { reactionGroups { content viewerHasReacted reactors { totalCount } } }
-}`, detailChecks, detailReviews, detailThreads, detailThreadComments, detailComments)
+}`, detailChecks, detailReviews, detailThreads, detailThreadComments, detailComments,
+	detailReviewRequests, detailAssignees)
 
 type reactionGroupJSON struct {
 	Content          string `json:"content"`
@@ -252,6 +266,46 @@ type prDetailJSON struct {
 		TotalCount int           `json:"totalCount"`
 		Nodes      []commentJSON `json:"nodes"`
 	} `json:"comments"`
+	ReviewRequests struct {
+		Nodes []struct {
+			RequestedReviewer *reviewerJSON `json:"requestedReviewer"`
+		} `json:"nodes"`
+	} `json:"reviewRequests"`
+	Assignees struct {
+		Nodes []userJSON `json:"nodes"`
+	} `json:"assignees"`
+}
+
+// userJSON is a user with its node id and its display name.
+type userJSON struct {
+	ID    string  `json:"id"`
+	Login string  `json:"login"`
+	Name  *string `json:"name"`
+}
+
+func (u userJSON) actor() model.Actor {
+	return model.Actor{ID: u.ID, Login: u.Login, Name: deref(u.Name), Typename: model.TypenameUser}
+}
+
+// reviewerJSON is a member of the GitHub RequestedReviewer union.
+type reviewerJSON struct {
+	Typename     string  `json:"__typename"`
+	ID           string  `json:"id"`
+	Login        string  `json:"login"`
+	CombinedSlug string  `json:"combinedSlug"`
+	Name         *string `json:"name"`
+}
+
+// actor returns the reviewer. ok is false for a type that the query does
+// not read, for example a Mannequin.
+func (r reviewerJSON) actor() (model.Actor, bool) {
+	switch r.Typename {
+	case model.TypenameUser, model.TypenameBot:
+		return model.Actor{ID: r.ID, Login: r.Login, Name: deref(r.Name), Typename: r.Typename}, true
+	case model.TypenameTeam:
+		return model.Actor{ID: r.ID, Login: r.CombinedSlug, Name: deref(r.Name), Typename: r.Typename}, true
+	}
+	return model.Actor{}, false
 }
 
 type detailResponse struct {
@@ -266,7 +320,7 @@ type detailResponse struct {
 
 // PRDetail returns one PR with the summary fields and the detail fields:
 // body, checks, reviews, threads with all comments and reactions, PR
-// comments, and the merge fields. It returns an error that wraps
+// comments, the merge fields, the requested reviewers, and the assignees. It returns an error that wraps
 // ErrNotFound if GitHub cannot find the repository or the PR. It does not
 // set NewestAuthor; only the search summaries fill it.
 func (c *Client) PRDetail(ctx context.Context, owner, repo string, n int) (model.PR, error) {
@@ -336,6 +390,18 @@ func (c *Client) PRDetail(ctx context.Context, owner, repo string, n int) (model
 	pr.CommentCount = d.Comments.TotalCount
 	for _, cm := range d.Comments.Nodes {
 		pr.Comments = append(pr.Comments, cm.comment())
+	}
+
+	for _, rr := range d.ReviewRequests.Nodes {
+		if rr.RequestedReviewer == nil {
+			continue
+		}
+		if a, ok := rr.RequestedReviewer.actor(); ok {
+			pr.RequestedReviewers = append(pr.RequestedReviewers, a)
+		}
+	}
+	for _, u := range d.Assignees.Nodes {
+		pr.Assignees = append(pr.Assignees, u.actor())
 	}
 	return pr, nil
 }

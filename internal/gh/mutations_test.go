@@ -159,6 +159,62 @@ func TestMutationRequestBodies(t *testing.T) {
 			wantInput: map[string]any{"id": "PRRC_9"},
 		},
 		{
+			name:     "update branch with merge",
+			mutation: "updatePullRequestBranch(input: $input)",
+			data:     `{"updatePullRequestBranch": {"pullRequest": {"id": "PR_1", "headRefOid": "def456"}}}`,
+			call: func(c *Client) error {
+				return c.UpdateBranch(context.Background(), "PR_1", UpdateMerge, "abc123")
+			},
+			wantInput: map[string]any{"pullRequestId": "PR_1", "updateMethod": "MERGE", "expectedHeadOid": "abc123"},
+		},
+		{
+			name:     "update branch with rebase and no head",
+			mutation: "updatePullRequestBranch(input: $input)",
+			data:     `{"updatePullRequestBranch": {"pullRequest": {"id": "PR_1", "headRefOid": "def456"}}}`,
+			call: func(c *Client) error {
+				return c.UpdateBranch(context.Background(), "PR_1", UpdateRebase, "")
+			},
+			wantInput: map[string]any{"pullRequestId": "PR_1", "updateMethod": "REBASE"},
+		},
+		{
+			name:     "request reviews keeps teams and bots",
+			mutation: "requestReviews(input: $input)",
+			data:     `{"requestReviews": {"pullRequest": {"id": "PR_1"}}}`,
+			call: func(c *Client) error {
+				return c.RequestReviews(context.Background(), "PR_1", []string{"U_a", "U_b"}, []string{"T_core"}, []string{"BOT_x"})
+			},
+			wantInput: map[string]any{"pullRequestId": "PR_1", "userIds": []any{"U_a", "U_b"},
+				"teamIds": []any{"T_core"}, "botIds": []any{"BOT_x"}, "union": false},
+		},
+		{
+			name:     "request reviews from nobody",
+			mutation: "requestReviews(input: $input)",
+			data:     `{"requestReviews": {"pullRequest": {"id": "PR_1"}}}`,
+			call: func(c *Client) error {
+				return c.RequestReviews(context.Background(), "PR_1", nil, nil, nil)
+			},
+			wantInput: map[string]any{"pullRequestId": "PR_1", "userIds": []any{},
+				"teamIds": []any{}, "botIds": []any{}, "union": false},
+		},
+		{
+			name:     "add assignees",
+			mutation: "addAssigneesToAssignable(input: $input)",
+			data:     `{"addAssigneesToAssignable": {"clientMutationId": null}}`,
+			call: func(c *Client) error {
+				return c.AddAssignees(context.Background(), "PR_1", []string{"U_a"})
+			},
+			wantInput: map[string]any{"assignableId": "PR_1", "assigneeIds": []any{"U_a"}},
+		},
+		{
+			name:     "remove assignees",
+			mutation: "removeAssigneesFromAssignable(input: $input)",
+			data:     `{"removeAssigneesFromAssignable": {"clientMutationId": null}}`,
+			call: func(c *Client) error {
+				return c.RemoveAssignees(context.Background(), "PR_1", []string{"U_a", "U_b"})
+			},
+			wantInput: map[string]any{"assignableId": "PR_1", "assigneeIds": []any{"U_a", "U_b"}},
+		},
+		{
 			name:     "submit review with no body",
 			mutation: "submitPullRequestReview(input: $input)",
 			data:     `{"submitPullRequestReview": {"pullRequestReview": {"id": "PRR_9", "state": "CHANGES_REQUESTED"}}}`,
@@ -512,5 +568,36 @@ func TestMutationHTTPError(t *testing.T) {
 	var httpErr *api.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusBadGateway {
 		t.Errorf("err = %v, want HTTP 502", err)
+	}
+}
+
+func TestUpdateBranchError(t *testing.T) {
+	c, _ := newTestClient(t, func(gqlRequest) reply { return fixture(t, "update_branch_up_to_date.json") })
+
+	err := c.UpdateBranch(context.Background(), "PR_1", UpdateMerge, "abc123")
+	var gqlErr *api.GraphQLError
+	if !errors.As(err, &gqlErr) {
+		t.Fatalf("err = %v, want GraphQLError", err)
+	}
+	if !strings.Contains(err.Error(), "no new commits on the base branch") || !strings.Contains(err.Error(), "update branch PR_1") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestAssigneeMutationErrors(t *testing.T) {
+	const body = `{"data": null, "errors": [{"type": "FORBIDDEN", "message": "Resource not accessible by integration"}]}`
+	for name, call := range map[string]func(c *Client) error{
+		"add":    func(c *Client) error { return c.AddAssignees(context.Background(), "PR_1", []string{"U_a"}) },
+		"remove": func(c *Client) error { return c.RemoveAssignees(context.Background(), "PR_1", []string{"U_a"}) },
+		"request": func(c *Client) error {
+			return c.RequestReviews(context.Background(), "PR_1", []string{"U_a"}, nil, nil)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, _ := newTestClient(t, func(gqlRequest) reply { return reply{status: http.StatusOK, body: body} })
+			if err := call(c); err == nil || !strings.Contains(err.Error(), "Resource not accessible") {
+				t.Errorf("err = %v, want the GraphQL error", err)
+			}
+		})
 	}
 }
