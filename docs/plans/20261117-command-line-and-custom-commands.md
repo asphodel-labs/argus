@@ -132,14 +132,14 @@
 - Create: `internal/commands/commands.go`
 - Create: `internal/commands/commands_test.go`
 
-- [ ] create `commands.Runner` with `Run(ctx, cmd, pr)`
-- [ ] background mode: run `sh -c 'cd <quoted clone> && <rendered>'`. On a non-zero exit, return the last line of stderr, else the last line of stdout, else "exit code N"
-- [ ] overlay mode: run `agtermctl session overlay open --block --target <session> --cwd <clone> 'PATH=<quoted PATH>; export PATH; cd <quoted clone> && <rendered>'`
-- [ ] add `commands.ErrNoAgterm` ("overlay commands require agterm"), and return it for an overlay command without a session
-- [ ] return the `*review.MissingClone` error unchanged when the repo has no clone
-- [ ] write tests with a fake runner for both modes: they assert the `cd` in the script, and the PATH prefix in the overlay arguments
-- [ ] write tests for the error text (stderr, stdout only, no output), the missing clone, and the missing agterm session
-- [ ] run `make test`: it must pass before task 5
+- [x] create `commands.Runner` with `Run(ctx, cmd, pr)`
+- [x] background mode: run `sh -c 'cd <quoted clone> && <rendered>'`. On a non-zero exit, return the last line of stderr, else the last line of stdout, else "exit code N"
+- [x] overlay mode: run `agtermctl session overlay open --block --target <session> --cwd <clone> 'PATH=<quoted PATH>; export PATH; cd <quoted clone> && <rendered>'`
+- [x] add `commands.ErrNoAgterm` ("overlay commands require agterm"), and return it for an overlay command without a session
+- [x] return the `*review.MissingClone` error unchanged when the repo has no clone
+- [x] write tests with a fake runner for both modes: they assert the `cd` in the script, and the PATH prefix in the overlay arguments
+- [x] write tests for the error text (stderr, stdout only, no output), the missing clone, and the missing agterm session
+- [x] run `make test`: it must pass before task 5
 
 ### Task 5: Add the yank key
 
