@@ -23,7 +23,7 @@ var missingAPI = &review.MissingClone{Repo: "acme/api", Dir: "/src/acme/api"}
 func newCloneProgram(t *testing.T, r *fakeRunner) *teatest.TestModel {
 	t.Helper()
 	w := &review.Worktrees{Runner: r}
-	tm := teatest.NewTestModel(t, New(Options{
+	tm := teatest.NewTestModel(t, mustNew(t, Options{
 		Cloner: w, Styles: testStyles(t), Me: "me", Now: fixedNow,
 	}), teatest.WithInitialTermSize(160, 50))
 	tm.Send(CloneNeededMsg{Missing: missingAPI})
@@ -99,7 +99,7 @@ func TestClonePromptError(t *testing.T) {
 }
 
 func TestClonePromptNoCloner(t *testing.T) {
-	m := New(Options{Styles: testStyles(t)})
+	m := mustNew(t, Options{Styles: testStyles(t)})
 	_, cmd := m.Update(CloneNeededMsg{Missing: missingAPI})
 	drive(m, cmd)
 	if m.Dialogs() != 0 || !strings.Contains(m.Status().Message(), "no clone of acme/api") {

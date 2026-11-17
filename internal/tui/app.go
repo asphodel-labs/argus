@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/asphodel-labs/argus/internal/config"
 	"github.com/asphodel-labs/argus/internal/execx"
 	"github.com/asphodel-labs/argus/internal/model"
 	"github.com/asphodel-labs/argus/internal/poller"
@@ -105,6 +106,12 @@ type Options struct {
 	// Launcher starts the Claude session for the p key. Without it the p
 	// key shows a message.
 	Launcher Launcher
+	// Commands are the custom commands of the config. A command runs with
+	// ":name", or with its key if it has one.
+	Commands []config.Command
+	// Commander runs the custom commands. Without it a custom command
+	// shows a message.
+	Commander Commander
 	// OpenCommand is the command that opens a URL. It is "open" on macOS
 	// and "xdg-open" on other systems when empty.
 	OpenCommand string
@@ -121,19 +128,21 @@ type Options struct {
 // Model is the root Bubble Tea model: two panes, the status bar, the help
 // overlay, and the dialog stack.
 type Model struct {
-	ctx      context.Context
-	poller   Poller
-	notifier Notifier
-	detailer Detailer
-	searcher PRSearcher
-	orgs     []string
-	github   GitHub
-	merges   MergeMemory
-	runner   execx.Runner
-	cloner   Cloner
-	reviewer Reviewer
-	launcher Launcher
-	openCmd  string
+	ctx       context.Context
+	poller    Poller
+	notifier  Notifier
+	detailer  Detailer
+	searcher  PRSearcher
+	orgs      []string
+	github    GitHub
+	merges    MergeMemory
+	runner    execx.Runner
+	cloner    Cloner
+	reviewer  Reviewer
+	launcher  Launcher
+	commands  []config.Command
+	commander Commander
+	openCmd   string
 	// pbcopy is true on macOS. Then the y key also runs pbcopy.
 	pbcopy bool
 	styles Styles
@@ -159,7 +168,8 @@ type Model struct {
 }
 
 // New returns the root model. A zero Options.Keys gives DefaultKeyMap.
-func New(opts Options) *Model {
+// New returns an error if the key of a custom command is a built-in key.
+func New(opts Options) (*Model, error) {
 	ctx := opts.Context
 	if ctx == nil {
 		ctx = context.Background()
@@ -168,36 +178,42 @@ func New(opts Options) *Model {
 	if keys.Quit.Keys == nil {
 		keys = DefaultKeyMap()
 	}
+	keys, err := withCommandKeys(keys, opts.Commands)
+	if err != nil {
+		return nil, err
+	}
 	openCmd := opts.OpenCommand
 	if openCmd == "" {
 		openCmd = openCommand()
 	}
 	m := &Model{
-		ctx:      ctx,
-		github:   opts.GitHub,
-		searcher: opts.Search,
-		orgs:     opts.Orgs,
-		merges:   opts.Merges,
-		runner:   opts.Runner,
-		cloner:   opts.Cloner,
-		reviewer: opts.Reviewer,
-		launcher: opts.Launcher,
-		openCmd:  openCmd,
-		pbcopy:   runtime.GOOS == "darwin",
-		poller:   opts.Poller,
-		notifier: opts.Notifier,
-		detailer: opts.Detail,
-		styles:   opts.Styles,
-		keys:     keys,
-		width:    80,
-		height:   24,
-		list:     newListPane(opts.Me, opts.BotLogins, opts.Now),
-		detail:   newDetailPane(opts.Me, opts.Now, opts.Styles),
+		ctx:       ctx,
+		github:    opts.GitHub,
+		searcher:  opts.Search,
+		orgs:      opts.Orgs,
+		merges:    opts.Merges,
+		runner:    opts.Runner,
+		cloner:    opts.Cloner,
+		reviewer:  opts.Reviewer,
+		launcher:  opts.Launcher,
+		commands:  opts.Commands,
+		commander: opts.Commander,
+		openCmd:   openCmd,
+		pbcopy:    runtime.GOOS == "darwin",
+		poller:    opts.Poller,
+		notifier:  opts.Notifier,
+		detailer:  opts.Detail,
+		styles:    opts.Styles,
+		keys:      keys,
+		width:     80,
+		height:    24,
+		list:      newListPane(opts.Me, opts.BotLogins, opts.Now),
+		detail:    newDetailPane(opts.Me, opts.Now, opts.Styles),
 
 		reviewing: map[string]bool{},
 	}
 	m.resize()
-	return m
+	return m, nil
 }
 
 // Selected returns the PR under the list cursor, or false if the cursor is

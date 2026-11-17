@@ -194,7 +194,7 @@ func TestCommandLineFromListPane(t *testing.T) {
 
 func TestCommandLineNeedsOpenedPR(t *testing.T) {
 	env := &actionEnv{gh: &fakeGitHub{}}
-	env.m = New(Options{GitHub: env.gh, Styles: testStyles(t), Me: "me", Now: fixedNow})
+	env.m = mustNew(t, Options{GitHub: env.gh, Styles: testStyles(t), Me: "me", Now: fixedNow})
 	env.m.list.setSnapshot(detailSnapshot(openPR()))
 	env.runLine("close")
 	if msg := env.m.Status().Message(); msg != "open a PR with enter" {

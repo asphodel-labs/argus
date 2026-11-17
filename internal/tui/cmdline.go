@@ -8,8 +8,16 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/asphodel-labs/argus/internal/config"
 	"github.com/asphodel-labs/argus/internal/model"
 )
+
+// Commander runs a custom command of the config on a PR detail.
+// commands.Runner implements it. Run returns a *review.MissingClone error
+// if the PR repository has no local clone.
+type Commander interface {
+	Run(ctx context.Context, cmd config.Command, pr model.PR) (string, error)
+}
 
 // lineCommand is one command of the command line: the name after ":" and
 // the function that runs it.
@@ -21,11 +29,15 @@ type lineCommand struct {
 // lineCommands returns the commands of the command line, in the order of
 // the completion.
 func (m *Model) lineCommands() []lineCommand {
-	return []lineCommand{
+	out := []lineCommand{
 		{name: "draft", run: (*Model).convertToDraft},
 		{name: "ready", run: (*Model).markReady},
 		{name: "close", run: (*Model).closePR},
 	}
+	for _, c := range m.commands {
+		out = append(out, lineCommand{name: c.Name, run: func(m *Model) tea.Cmd { return m.runCustom(c) }})
+	}
+	return out
 }
 
 // commandLineMsg tells that the user sent a command name from the command
@@ -193,4 +205,36 @@ func (m *Model) closePR() tea.Cmd {
 	return m.action(nil, pr.ID, "close "+prRef(pr), true, func(ctx context.Context) (string, error) {
 		return "", gh.ClosePR(ctx, pr.ID)
 	})
+}
+
+// runCustom runs the custom command c on the loaded detail of the opened
+// PR. The commander returns the text "<name>: done", and the action
+// message adds ": done" to the description, so the action ignores the
+// text. A missing clone opens the clone prompt (handleActionDone).
+func (m *Model) runCustom(c config.Command) tea.Cmd {
+	if !m.detail.hasSel {
+		return m.status.SetMessage("open a PR with enter")
+	}
+	if m.commander == nil {
+		return m.status.SetMessage("custom commands are not available")
+	}
+	detail, loaded := m.detail.cache[m.detail.sel.ID]
+	if !loaded {
+		return m.status.SetMessage("the PR detail is not loaded yet")
+	}
+	pr, commander := detail.pr, m.commander
+	return m.action(nil, pr.ID, c.Name, true, func(ctx context.Context) (string, error) {
+		_, err := commander.Run(ctx, c, pr)
+		return "", err
+	})
+}
+
+// customByKey returns the custom command of the key, or false.
+func (m *Model) customByKey(key string) (config.Command, bool) {
+	for _, c := range m.commands {
+		if c.Key != "" && c.Key == key {
+			return c, true
+		}
+	}
+	return config.Command{}, false
 }

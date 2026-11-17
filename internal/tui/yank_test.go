@@ -110,7 +110,7 @@ func TestYankPbcopyFailure(t *testing.T) {
 
 func TestYankNeedsOpenedPR(t *testing.T) {
 	env := &actionEnv{runner: &fakeRunner{}}
-	env.m = New(Options{Runner: env.runner, Styles: testStyles(t), Me: "me", Now: fixedNow})
+	env.m = mustNew(t, Options{Runner: env.runner, Styles: testStyles(t), Me: "me", Now: fixedNow})
 	env.m.list.setSnapshot(detailSnapshot(actionPR()))
 	env.press("j", "j", "y")
 	if msg := env.m.Status().Message(); msg != "open a PR with enter" {

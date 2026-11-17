@@ -14,6 +14,7 @@ import (
 	"github.com/asphodel-labs/argus/internal/execx"
 	"github.com/asphodel-labs/argus/internal/gh"
 	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/review"
 )
 
 // GitHub is the part of gh.Client that the PR actions use.
@@ -77,7 +78,8 @@ func (m *Model) action(origin actionDialog, prID, desc string, refresh bool, fn 
 	}
 }
 
-// handleActionDone shows the result of an action. On an error the dialog
+// handleActionDone shows the result of an action. A *review.MissingClone
+// error opens the clone prompt. On another error the dialog
 // that started the action stays open with its input. On a success the
 // dialog closes and the detail of the PR loads again. The dialog can be
 // under another dialog, for example the quit confirmation.
@@ -85,6 +87,10 @@ func (m *Model) handleActionDone(msg actionDoneMsg) tea.Cmd {
 	at := -1
 	if msg.origin != nil {
 		at = slices.Index(m.dialogs, Dialog(msg.origin))
+	}
+	var missing *review.MissingClone
+	if errors.As(msg.err, &missing) {
+		return func() tea.Msg { return CloneNeededMsg{Missing: missing} }
 	}
 	if msg.err != nil {
 		if at < 0 {
@@ -144,6 +150,10 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	if s == ":" {
 		m.list.pending, m.detail.pending = "", ""
 		return PushDialog(m.newCommandLine()), true
+	}
+	if c, found := m.customByKey(s); found {
+		m.list.pending, m.detail.pending = "", ""
+		return m.runCustom(c), true
 	}
 	switch s {
 	case "A", "M", "U", "R", "@", "f", "F", "c", "r", "+", "x", "o", "v", "p", "y":

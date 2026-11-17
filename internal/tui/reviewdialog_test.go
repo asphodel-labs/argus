@@ -490,7 +490,7 @@ func TestReviewDialogTeatest(t *testing.T) {
 	pr := reviewPR()
 	det := &fakeDetailer{prs: map[string]model.PR{pr.ID: pr}}
 	r := &fakeReviewer{result: annotated}
-	tm := teatest.NewTestModel(t, New(Options{
+	tm := teatest.NewTestModel(t, mustNew(t, Options{
 		Poller: p, Detail: det, GitHub: &fakeGitHub{}, Reviewer: r,
 		Styles: testStyles(t), Me: "me", Now: fixedNow,
 	}), teatest.WithInitialTermSize(160, 50))

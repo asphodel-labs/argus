@@ -43,7 +43,7 @@ func TestStackOrder(t *testing.T) {
 }
 
 func TestListShowsStack(t *testing.T) {
-	m := New(Options{Poller: newFakePoller(), Styles: testStyles(t), Me: "me", Now: fixedNow})
+	m := mustNew(t, Options{Poller: newFakePoller(), Styles: testStyles(t), Me: "me", Now: fixedNow})
 	m.Update(pollerMsg{Snapshot: &poller.Snapshot{RefreshedAt: listNow, Sections: []poller.Section{
 		{Scope: scopeAcme, Total: 3, PRs: []model.PR{
 			testPR("S2", "acme/api", 46, "Monthly min age", "bob", inStack("S", 2, 2), updated(10)),

@@ -183,14 +183,14 @@
 - Modify: `cmd/argus/main.go`
 - Create: `internal/tui/commands_test.go`
 
-- [ ] add the `Commander` interface and the `Options.Commands` and `Options.Commander` fields
-- [ ] return an error from `tui.New` when a custom key overlaps a built-in key, and exit with it in `cmd/argus`. Build the built-in set from the `KeyMap`, with the first key of each sequence such as `gg` and `za`
-- [ ] run a custom command from `:name` or its key on the loaded detail, through `m.action`, and send `CloneNeededMsg` for a `*review.MissingClone` error
-- [ ] add the custom command names to the completion, and the keyed commands to the help
-- [ ] create the `commands.Runner` in `cmd/argus/main.go` with the real runner, the worktrees, and the agterm session id
-- [ ] write tests: `:name` and the key call the fake commander with the command and the detail PR, the clone prompt opens on a missing clone, and the key overlap error for `A` and for the prefix key `g`
-- [ ] write a test for a command error: the status bar shows the last line
-- [ ] run `make test`: it must pass before task 8
+- [x] add the `Commander` interface and the `Options.Commands` and `Options.Commander` fields
+- [x] return an error from `tui.New` when a custom key overlaps a built-in key, and exit with it in `cmd/argus`. Build the built-in set from the `KeyMap`, with the first key of each sequence such as `gg` and `za`
+- [x] run a custom command from `:name` or its key on the loaded detail, through `m.action`, and send `CloneNeededMsg` for a `*review.MissingClone` error
+- [x] add the custom command names to the completion, and the keyed commands to the help
+- [x] create the `commands.Runner` in `cmd/argus/main.go` with the real runner, the worktrees, and the agterm session id
+- [x] write tests: `:name` and the key call the fake commander with the command and the detail PR, the clone prompt opens on a missing clone, and the key overlap error for `A` and for the prefix key `g`
+- [x] write a test for a command error: the status bar shows the last line
+- [x] run `make test`: it must pass before task 8
 
 ### Task 8: Verify acceptance criteria
 - [ ] verify `:draft`, `:ready`, `:close`, `y`, and custom commands with `:name` and a key

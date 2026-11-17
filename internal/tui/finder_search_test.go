@@ -59,7 +59,7 @@ func newSearchEnv(t *testing.T, prs ...model.PR) *searchEnv {
 	for _, p := range prs {
 		env.det.prs[p.ID] = p
 	}
-	env.m = New(Options{
+	env.m = mustNew(t, Options{
 		Search: env.s, Orgs: []string{"acme"}, Detail: env.det, GitHub: env.gh,
 		Styles: testStyles(t), Me: "me", Now: fixedNow,
 	})

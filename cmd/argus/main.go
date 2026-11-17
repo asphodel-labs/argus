@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/cli/go-gh/v2/pkg/api"
 
+	"github.com/asphodel-labs/argus/internal/commands"
 	"github.com/asphodel-labs/argus/internal/config"
 	"github.com/asphodel-labs/argus/internal/execx"
 	"github.com/asphodel-labs/argus/internal/gh"
@@ -79,19 +80,7 @@ func run() error {
 		RefreshInterval: cfg.RefreshInterval,
 		MinRefreshGap:   cfg.MinRefreshGap,
 	})
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		_ = p.Run(ctx) // Run returns only the context error.
-	}()
 	worktrees := &review.Worktrees{Runner: execx.Exec{}, RepoRoot: cfg.RepoRoot, Repos: cfg.Repos, Owners: cfg.Owners, HTTPS: cfg.CloneProtocol == config.CloneHTTPS}
-	cleaned := make(chan struct{})
-	go func() {
-		defer close(cleaned)
-		// The start-up cleanup removes only clean worktrees of merged or
-		// closed PRs. The TUI does not show its result.
-		_, _ = worktrees.Cleanup(ctx, client)
-	}()
 	reviewer := &review.Revdiff{
 		Worktrees: worktrees,
 		GitHub:    client,
@@ -110,10 +99,31 @@ func run() error {
 		SeenPath: filepath.Join(stateDir, notify.SeenFile),
 		Me:       cfg.User,
 	}
-	m := tui.New(tui.Options{Context: ctx, Poller: p, Notifier: notifier, Detail: client, Styles: styles,
+	commander := &commands.Runner{
+		Runner:    execx.Exec{},
+		Clones:    worktrees,
+		SessionID: os.Getenv("AGTERM_SESSION_ID"),
+	}
+	m, err := tui.New(tui.Options{Context: ctx, Poller: p, Notifier: notifier, Detail: client, Styles: styles,
 		Search: client, Orgs: cfg.Orgs, GitHub: client, Merges: merges, Runner: execx.Exec{}, Cloner: worktrees, Reviewer: reviewer, Launcher: launcher,
+		Commands: cfg.Commands, Commander: commander,
 		Me: cfg.User, BotLogins: cfg.BotLogins,
 	})
+	if err != nil {
+		return fmt.Errorf("config %s: %w", *configPath, err)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = p.Run(ctx) // Run returns only the context error.
+	}()
+	cleaned := make(chan struct{})
+	go func() {
+		defer close(cleaned)
+		// The start-up cleanup removes only clean worktrees of merged or
+		// closed PRs. The TUI does not show its result.
+		_, _ = worktrees.Cleanup(ctx, client)
+	}()
 	_, err = tea.NewProgram(m).Run()
 	cancel()
 	<-done

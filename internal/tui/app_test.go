@@ -80,7 +80,7 @@ func testStyles(t *testing.T) Styles {
 func newTestProgram(t *testing.T, opts Options) *teatest.TestModel {
 	t.Helper()
 	opts.Styles = testStyles(t)
-	return teatest.NewTestModel(t, New(opts), teatest.WithInitialTermSize(100, 30))
+	return teatest.NewTestModel(t, mustNew(t, opts), teatest.WithInitialTermSize(100, 30))
 }
 
 func key(s string) tea.KeyPressMsg {
@@ -153,7 +153,7 @@ func TestFocusSwitch(t *testing.T) {
 }
 
 func TestFocusKeys(t *testing.T) {
-	m := New(Options{Styles: testStyles(t)})
+	m := mustNew(t, Options{Styles: testStyles(t)})
 	steps := []struct {
 		key  string
 		want Focus
@@ -196,7 +196,7 @@ func TestHelpOverlay(t *testing.T) {
 }
 
 func TestHelpToggle(t *testing.T) {
-	m := New(Options{Styles: testStyles(t)})
+	m := mustNew(t, Options{Styles: testStyles(t)})
 	m.Update(key("?"))
 	if !m.HelpVisible() {
 		t.Fatal("help is not visible after ?")
@@ -240,7 +240,7 @@ func TestQuitWithoutUnsentText(t *testing.T) {
 }
 
 func TestQuitConfirmationKeys(t *testing.T) {
-	m := New(Options{Styles: testStyles(t)})
+	m := mustNew(t, Options{Styles: testStyles(t)})
 	m.Update(PushDialogMsg{Dialog: &fakeDialog{unsent: true}})
 	if _, cmd := m.Update(key("q")); cmd != nil {
 		t.Fatal("q with unsent text returned a command, want the confirmation")
@@ -267,7 +267,7 @@ func TestQuitConfirmationKeys(t *testing.T) {
 }
 
 func TestDialogBlocksPaneKeys(t *testing.T) {
-	m := New(Options{Styles: testStyles(t)})
+	m := mustNew(t, Options{Styles: testStyles(t)})
 	m.Update(PushDialogMsg{Dialog: &fakeDialog{}})
 	m.Update(key("tab"))
 	m.Update(key("?"))
@@ -327,7 +327,7 @@ func TestPollerSnapshotRunsNotifier(t *testing.T) {
 func TestPollerClosedChannel(t *testing.T) {
 	p := newFakePoller()
 	close(p.ch)
-	m := New(Options{Poller: p, Styles: testStyles(t)})
+	m := mustNew(t, Options{Poller: p, Styles: testStyles(t)})
 	if msg := m.Init()(); msg != (pollerClosedMsg{}) {
 		t.Fatalf("Init command returned %T, want pollerClosedMsg", msg)
 	}
@@ -339,7 +339,7 @@ func TestPollerClosedChannel(t *testing.T) {
 func TestNotifierRunsInOrderOneAtATime(t *testing.T) {
 	p := newFakePoller()
 	n := &fakeNotifier{calls: make(chan *poller.Snapshot, 4)}
-	m := New(Options{Poller: p, Notifier: n, Styles: testStyles(t)})
+	m := mustNew(t, Options{Poller: p, Notifier: n, Styles: testStyles(t)})
 
 	s1, s2, s3 := testSnapshot(time.Now(), 1), testSnapshot(time.Now(), 2), testSnapshot(time.Now(), 3)
 	m.Update(pollerMsg{Snapshot: s1})
@@ -369,7 +369,7 @@ func TestNotifierRunsInOrderOneAtATime(t *testing.T) {
 }
 
 func TestNotifierErrorShowsMessage(t *testing.T) {
-	m := New(Options{Notifier: &fakeNotifier{}, Styles: testStyles(t)})
+	m := mustNew(t, Options{Notifier: &fakeNotifier{}, Styles: testStyles(t)})
 	m.notifying = true
 	m.Update(notifyDoneMsg{err: errors.New("write seen state: disk full")})
 	if got := m.Status().Message(); got != "notify: write seen state: disk full" {
@@ -379,7 +379,7 @@ func TestNotifierErrorShowsMessage(t *testing.T) {
 
 func TestRefreshKey(t *testing.T) {
 	p := newFakePoller()
-	m := New(Options{Poller: p, Styles: testStyles(t)})
+	m := mustNew(t, Options{Poller: p, Styles: testStyles(t)})
 	_, cmd := m.Update(key("ctrl+r"))
 	if p.refreshCount() != 1 {
 		t.Fatalf("RefreshNow calls = %d, want 1", p.refreshCount())
@@ -392,7 +392,7 @@ func TestRefreshKey(t *testing.T) {
 func TestViewFitsSize(t *testing.T) {
 	for _, size := range [][2]int{{90, 20}, {60, 12}, {160, 40}} {
 		w, h := size[0], size[1]
-		m := New(Options{Poller: newFakePoller(), Styles: testStyles(t)})
+		m := mustNew(t, Options{Poller: newFakePoller(), Styles: testStyles(t)})
 		m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 		m.Update(pollerMsg{Snapshot: testSnapshot(time.Now(), 2)})
 		for _, view := range []string{"panes", "help"} {
@@ -410,4 +410,14 @@ func TestViewFitsSize(t *testing.T) {
 			}
 		}
 	}
+}
+
+// mustNew returns New(opts) and stops the test on an error.
+func mustNew(t *testing.T, opts Options) *Model {
+	t.Helper()
+	m, err := New(opts)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return m
 }
