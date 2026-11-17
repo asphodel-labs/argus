@@ -45,19 +45,35 @@ type ReviewThreadInput struct {
 type PendingReview struct {
 	ID        string
 	CommitOID string
-	// Comments are the first pendingCommentsPage comments of the review.
+	// Comments are all the comments of the review.
 	Comments []PendingComment
 }
 
-// PendingComment is one comment of a pending review. Line and StartLine
-// are 0 when GitHub sends null. File is true for a file-level comment.
+// ReviewStatus is the state, the commit, the body, and the comments of one
+// review.
+type ReviewStatus struct {
+	// State is a value of the GitHub PullRequestReviewState enum, for
+	// example PENDING or COMMENTED.
+	State     string
+	CommitOID string
+	Body      string
+	// URL is the URL of the review on GitHub.
+	URL      string
+	Comments []PendingComment
+}
+
+// PendingComment is one comment of a review. A line field is 0 when
+// GitHub sends null. File is true for a file-level comment.
 type PendingComment struct {
-	Path         string
-	Body         string
-	Line         int
-	OriginalLine int
-	StartLine    int
-	File         bool
+	// ID is the node id of the comment.
+	ID                string
+	Path              string
+	Body              string
+	Line              int
+	OriginalLine      int
+	StartLine         int
+	OriginalStartLine int
+	File              bool
 }
 
 // mutate sends one mutation with the variable $input and decodes the
@@ -178,9 +194,13 @@ func (c *Client) UnresolveThread(ctx context.Context, threadID string) error {
 // at most one pending review on a PR.
 const pendingReviewsPage = 10
 
-// pendingCommentsPage is the number of comments the lookup reads from the
-// pending review.
-const pendingCommentsPage = 100
+// reviewCommentsPage is the number of review comments in one page.
+const reviewCommentsPage = 100
+
+// reviewCommentFields are the fields of one review comment and the page
+// info of the comment connection.
+const reviewCommentFields = `pageInfo { hasNextPage endCursor }
+          nodes { id path body line originalLine startLine originalStartLine subjectType }`
 
 var pendingReviewQuery = fmt.Sprintf(`query PendingReview($id: ID!) {
   node(id: $id) {
@@ -188,40 +208,96 @@ var pendingReviewQuery = fmt.Sprintf(`query PendingReview($id: ID!) {
       reviews(first: %d, states: [PENDING]) {
         nodes {
           id viewerDidAuthor commit { oid }
-          comments(first: %d) { nodes { path body line originalLine startLine subjectType } }
+          comments(first: %d) { %s }
         }
       }
     }
   }
-}`, pendingReviewsPage, pendingCommentsPage)
+}`, pendingReviewsPage, reviewCommentsPage, reviewCommentFields)
+
+var reviewQuery = fmt.Sprintf(`query Review($id: ID!, $after: String) {
+  node(id: $id) {
+    ... on PullRequestReview {
+      state body url commit { oid }
+      comments(first: %d, after: $after) { %s }
+    }
+  }
+}`, reviewCommentsPage, reviewCommentFields)
+
+type commitRef struct {
+	OID string `json:"oid"`
+}
+
+// commentConnection is one page of review comments.
+type commentConnection struct {
+	PageInfo struct {
+		HasNextPage bool   `json:"hasNextPage"`
+		EndCursor   string `json:"endCursor"`
+	} `json:"pageInfo"`
+	Nodes []struct {
+		ID                string `json:"id"`
+		Path              string `json:"path"`
+		Body              string `json:"body"`
+		Line              *int   `json:"line"`
+		OriginalLine      *int   `json:"originalLine"`
+		StartLine         *int   `json:"startLine"`
+		OriginalStartLine *int   `json:"originalStartLine"`
+		SubjectType       string `json:"subjectType"`
+	} `json:"nodes"`
+}
+
+// comments returns the comments of the page.
+func (cc commentConnection) comments() []PendingComment {
+	var out []PendingComment
+	for _, c := range cc.Nodes {
+		out = append(out, PendingComment{
+			ID:                c.ID,
+			Path:              c.Path,
+			Body:              c.Body,
+			Line:              intOrZero(c.Line),
+			OriginalLine:      intOrZero(c.OriginalLine),
+			StartLine:         intOrZero(c.StartLine),
+			OriginalStartLine: intOrZero(c.OriginalStartLine),
+			File:              c.SubjectType == "FILE",
+		})
+	}
+	return out
+}
+
+// next returns the cursor of the next page, or "" after the last page.
+func (cc commentConnection) next() string {
+	if !cc.PageInfo.HasNextPage {
+		return ""
+	}
+	return cc.PageInfo.EndCursor
+}
 
 type pendingReviewResponse struct {
 	Node *struct {
 		Reviews struct {
 			Nodes []struct {
-				ID              string `json:"id"`
-				ViewerDidAuthor bool   `json:"viewerDidAuthor"`
-				Commit          *struct {
-					OID string `json:"oid"`
-				} `json:"commit"`
-				Comments struct {
-					Nodes []struct {
-						Path         string `json:"path"`
-						Body         string `json:"body"`
-						Line         *int   `json:"line"`
-						OriginalLine *int   `json:"originalLine"`
-						StartLine    *int   `json:"startLine"`
-						SubjectType  string `json:"subjectType"`
-					} `json:"nodes"`
-				} `json:"comments"`
+				ID              string            `json:"id"`
+				ViewerDidAuthor bool              `json:"viewerDidAuthor"`
+				Commit          *commitRef        `json:"commit"`
+				Comments        commentConnection `json:"comments"`
 			} `json:"nodes"`
 		} `json:"reviews"`
 	} `json:"node"`
 }
 
-// PendingReview returns the pending review of the viewer on the PR.
-// ok is false if the viewer has no pending review. It returns an error
-// that wraps ErrNotFound if GitHub cannot find the PR.
+type reviewResponse struct {
+	Node *struct {
+		State    string            `json:"state"`
+		Body     string            `json:"body"`
+		URL      string            `json:"url"`
+		Commit   *commitRef        `json:"commit"`
+		Comments commentConnection `json:"comments"`
+	} `json:"node"`
+}
+
+// PendingReview returns the pending review of the viewer on the PR with
+// all its comments. ok is false if the viewer has no pending review. It
+// returns an error that wraps ErrNotFound if GitHub cannot find the PR.
 func (c *Client) PendingReview(ctx context.Context, prID string) (review PendingReview, ok bool, err error) {
 	name := "pending review " + prID
 	var resp pendingReviewResponse
@@ -235,23 +311,62 @@ func (c *Client) PendingReview(ctx context.Context, prID string) (review Pending
 		if !r.ViewerDidAuthor {
 			continue
 		}
-		out := PendingReview{ID: r.ID}
+		out := PendingReview{ID: r.ID, Comments: r.Comments.comments()}
 		if r.Commit != nil {
 			out.CommitOID = r.Commit.OID
 		}
-		for _, c := range r.Comments.Nodes {
-			out.Comments = append(out.Comments, PendingComment{
-				Path:         c.Path,
-				Body:         c.Body,
-				Line:         intOrZero(c.Line),
-				OriginalLine: intOrZero(c.OriginalLine),
-				StartLine:    intOrZero(c.StartLine),
-				File:         c.SubjectType == "FILE",
-			})
+		if after := r.Comments.next(); after != "" {
+			st, found, err := c.review(ctx, r.ID, after)
+			if err != nil {
+				return PendingReview{}, false, err
+			}
+			if !found {
+				return PendingReview{}, false, fmt.Errorf("%s: review %s: %w", name, r.ID, ErrNotFound)
+			}
+			out.Comments = append(out.Comments, st.Comments...)
 		}
 		return out, true, nil
 	}
 	return PendingReview{}, false, nil
+}
+
+// Review returns the state, the commit, the body, the URL, and all the
+// comments of a review.
+// found is false if GitHub cannot find the review, for example after the
+// viewer deleted a pending review.
+func (c *Client) Review(ctx context.Context, reviewID string) (ReviewStatus, bool, error) {
+	return c.review(ctx, reviewID, "")
+}
+
+// review reads the review and its comments after the cursor after, one
+// page at a time.
+func (c *Client) review(ctx context.Context, reviewID, after string) (ReviewStatus, bool, error) {
+	name := "review " + reviewID
+	var out ReviewStatus
+	for {
+		vars := map[string]any{"id": reviewID}
+		if after != "" {
+			vars["after"] = after
+		}
+		var resp reviewResponse
+		if err := c.query(ctx, name, reviewQuery, vars, &resp); err != nil {
+			if err := notFound(name, err); errors.Is(err, ErrNotFound) {
+				return ReviewStatus{}, false, nil
+			}
+			return ReviewStatus{}, false, err
+		}
+		if resp.Node == nil {
+			return ReviewStatus{}, false, nil
+		}
+		out.State, out.Body, out.URL = resp.Node.State, resp.Node.Body, resp.Node.URL
+		if resp.Node.Commit != nil {
+			out.CommitOID = resp.Node.Commit.OID
+		}
+		out.Comments = append(out.Comments, resp.Node.Comments.comments()...)
+		if after = resp.Node.Comments.next(); after == "" {
+			return out, true, nil
+		}
+	}
 }
 
 // intOrZero returns *p, or 0 for nil.
@@ -278,13 +393,18 @@ func (c *Client) StartReview(ctx context.Context, prID, commitOID string) (strin
 }
 
 const addThreadMutation = `mutation AddThread($input: AddPullRequestReviewThreadInput!) {
-  addPullRequestReviewThread(input: $input) { thread { id } }
+  addPullRequestReviewThread(input: $input) { thread { id comments(first: 1) { nodes { id } } } }
 }`
 
 type addThreadResponse struct {
 	AddPullRequestReviewThread struct {
 		Thread *struct {
-			ID string `json:"id"`
+			ID       string `json:"id"`
+			Comments struct {
+				Nodes []struct {
+					ID string `json:"id"`
+				} `json:"nodes"`
+			} `json:"comments"`
 		} `json:"thread"`
 	} `json:"addPullRequestReviewThread"`
 }
@@ -305,8 +425,8 @@ func threadInput(reviewID string, t ReviewThreadInput) map[string]any {
 	return input
 }
 
-// AddReviewThread adds a thread to the pending review and returns the
-// thread id.
+// AddReviewThread adds a thread to the pending review and returns the id
+// of the first comment of the thread. DeleteReviewComment takes this id.
 func (c *Client) AddReviewThread(ctx context.Context, reviewID string, t ReviewThreadInput) (string, error) {
 	name := fmt.Sprintf("add review thread %s:%d", t.Path, t.Line)
 	var resp addThreadResponse
@@ -314,10 +434,20 @@ func (c *Client) AddReviewThread(ctx context.Context, reviewID string, t ReviewT
 		return "", err
 	}
 	th := resp.AddPullRequestReviewThread.Thread
-	if th == nil || th.ID == "" {
-		return "", fmt.Errorf("%s: no thread id in the response", name)
+	if th == nil || len(th.Comments.Nodes) == 0 || th.Comments.Nodes[0].ID == "" {
+		return "", fmt.Errorf("%s: no comment id in the response", name)
 	}
-	return th.ID, nil
+	return th.Comments.Nodes[0].ID, nil
+}
+
+const deleteCommentMutation = `mutation DeleteComment($input: DeletePullRequestReviewCommentInput!) {
+  deletePullRequestReviewComment(input: $input) { clientMutationId }
+}`
+
+// DeleteReviewComment deletes a review comment.
+func (c *Client) DeleteReviewComment(ctx context.Context, commentID string) error {
+	input := map[string]any{"id": commentID}
+	return c.mutate(ctx, "delete review comment "+commentID, deleteCommentMutation, input, nil)
 }
 
 const submitReviewMutation = `mutation SubmitReview($input: SubmitPullRequestReviewInput!) {

@@ -494,6 +494,24 @@ func TestCommentErrorKeepsTextSync(t *testing.T) {
 	}
 }
 
+// TestTextDialogEscWhileSending checks that esc does not close a text
+// dialog while its text is sent.
+func TestTextDialogEscWhileSending(t *testing.T) {
+	env := newActionModel(t, actionPR())
+	env.press("c")
+	env.typeText("hi")
+	_, send := env.m.Update(ctrlS)
+	env.press("esc")
+	if d, ok := env.m.topDialog().(*textDialog); !ok || !d.sending {
+		t.Fatalf("top %T after esc while sending", env.m.topDialog())
+	}
+	drive(env.m, send)
+	if env.m.Dialogs() != 0 {
+		t.Fatalf("%d dialogs open after the send", env.m.Dialogs())
+	}
+	wantCalls(t, env.gh.Calls(), "AddComment PR_1 hi")
+}
+
 func TestTextDialogPasteAndUnsent(t *testing.T) {
 	env := newActionModel(t, actionPR())
 	env.press("c")

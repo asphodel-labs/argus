@@ -54,6 +54,20 @@ func TestClaudeKeyShowsExcludeWarning(t *testing.T) {
 	}
 }
 
+// TestClaudeKeyShowsDirtyWarning checks that a dirty worktree shows a
+// warning with the info/exclude error after the launch.
+func TestClaudeKeyShowsDirtyWarning(t *testing.T) {
+	l := &fakeLauncher{wt: review.Worktree{Dirty: true, ExcludeErr: errors.New("permission denied")}}
+	env := newActionModel(t, reviewPR())
+	env.m.launcher = l
+	env.press("p")
+	want := "claude acme/api#7: session started; warning: the worktree has local changes, so argus did not move it to the PR head" +
+		"; warning: permission denied"
+	if msg := env.m.Status().Message(); msg != want {
+		t.Fatalf("message %q, want %q", msg, want)
+	}
+}
+
 func TestClaudeKeyErrors(t *testing.T) {
 	tests := []struct {
 		name string

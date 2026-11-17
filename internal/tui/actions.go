@@ -69,19 +69,25 @@ func (m *Model) action(origin actionDialog, prID, desc string, refresh bool, fn 
 
 // handleActionDone shows the result of an action. On an error the dialog
 // that started the action stays open with its input. On a success the
-// dialog closes and the detail of the PR loads again.
+// dialog closes and the detail of the PR loads again. The dialog can be
+// under another dialog, for example the quit confirmation.
 func (m *Model) handleActionDone(msg actionDoneMsg) tea.Cmd {
-	top := m.topDialog()
-	fromTop := msg.origin != nil && top == Dialog(msg.origin)
-	if msg.err != nil {
-		if fromTop {
-			msg.origin.failed(msg.err)
-			return nil
-		}
-		return m.status.SetMessage(msg.desc + " failed: " + firstLine(msg.err.Error()))
+	at := -1
+	if msg.origin != nil {
+		at = slices.Index(m.dialogs, Dialog(msg.origin))
 	}
-	if fromTop {
-		m.popDialog()
+	if msg.err != nil {
+		if at < 0 {
+			return m.status.SetMessage(msg.desc + " failed: " + firstLine(msg.err.Error()))
+		}
+		msg.origin.failed(msg.err)
+		if at != len(m.dialogs)-1 {
+			return m.status.SetMessage(msg.desc + " failed: " + firstLine(msg.err.Error()))
+		}
+		return nil
+	}
+	if at >= 0 {
+		m.dialogs = slices.Delete(m.dialogs, at, at+1)
 	}
 	cmds := []tea.Cmd{m.status.SetMessage(msg.desc + ": done" + msg.note)}
 	if msg.refresh {

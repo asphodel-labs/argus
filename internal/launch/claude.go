@@ -90,8 +90,8 @@ func (c *Claude) Command(pr model.PR, wt review.Worktree) (name string, args []s
 
 // Launch sets up the PR worktree and starts Claude in a new agterm
 // session. pr must be a PR detail with the head SHA and the base branch.
-// Launch returns the worktree, so that the caller can show
-// Worktree.ExcludeErr. Launch returns ErrNoAgterm outside agterm, and a
+// Launch returns the worktree, so that the caller can show Worktree.Dirty
+// and Worktree.ExcludeErr. Launch returns ErrNoAgterm outside agterm, and a
 // *review.MissingClone error if the repository has no clone.
 func (c *Claude) Launch(ctx context.Context, pr model.PR) (review.Worktree, error) {
 	if c.SessionID == "" {

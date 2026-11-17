@@ -499,6 +499,39 @@ func TestRateLimitPause(t *testing.T) {
 	}
 }
 
+// TestFailedRefreshKeepsRateLimitPause checks that a refresh that fails
+// after a scope reported a low rate limit waits for the reset, not for the
+// backoff.
+func TestFailedRefreshKeepsRateLimitPause(t *testing.T) {
+	g := newFakeGH()
+	g.notif = notModified(time.Hour)
+	resetAt := t0.Add(30 * time.Minute)
+	g.rl = gh.RateLimit{Remaining: RateLimitFloor - 10, ResetAt: resetAt}
+	g.searchErr = errors.New("boom")
+	h := start(t, g, Options{RefreshInterval: 10 * time.Minute})
+
+	ups := h.drain()
+	if len(ups) != 1 || ups[0].Err == nil || !strings.Contains(ups[0].Err.Error(), "boom") {
+		t.Fatalf("updates = %+v, want one refresh error", ups)
+	}
+	g.set(func(f *fakeGH) {
+		f.searchErr = nil
+		f.rl = gh.RateLimit{Remaining: 5000, ResetAt: t0.Add(2 * time.Hour)}
+	})
+
+	// The backoff ends at t0+1m, but the pause holds the retry.
+	if h.step(30*time.Minute - time.Second) {
+		t.Fatal("retry fired inside the pause")
+	}
+	h.wantRefreshes(1)
+	if !h.step(time.Second) {
+		t.Fatal("retry did not fire at the end of the pause")
+	}
+	if snap := h.snapshot(); !snap.RefreshedAt.Equal(resetAt) {
+		t.Errorf("RefreshedAt = %s, want %s", snap.RefreshedAt, resetAt)
+	}
+}
+
 func TestKeptPageCount(t *testing.T) {
 	g := newFakeGH()
 	g.notif = notModified(time.Hour)

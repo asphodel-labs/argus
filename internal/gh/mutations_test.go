@@ -3,6 +3,7 @@ package gh
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"reflect"
 	"strings"
@@ -140,6 +141,15 @@ func TestMutationRequestBodies(t *testing.T) {
 			wantInput: map[string]any{"pullRequestReviewId": "PRR_9", "event": "COMMENT", "body": "Two notes."},
 		},
 		{
+			name:     "delete review comment",
+			mutation: "deletePullRequestReviewComment(input: $input)",
+			data:     `{"deletePullRequestReviewComment": {"clientMutationId": null}}`,
+			call: func(c *Client) error {
+				return c.DeleteReviewComment(context.Background(), "PRRC_9")
+			},
+			wantInput: map[string]any{"id": "PRRC_9"},
+		},
+		{
 			name:     "submit review with no body",
 			mutation: "submitPullRequestReview(input: $input)",
 			data:     `{"submitPullRequestReview": {"pullRequestReview": {"id": "PRR_9", "state": "CHANGES_REQUESTED"}}}`,
@@ -226,14 +236,14 @@ func TestAddReviewThread(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c, ft := newTestClient(t, func(gqlRequest) reply {
-				return okReply(`{"addPullRequestReviewThread": {"thread": {"id": "PRRT_new"}}}`)
+				return okReply(`{"addPullRequestReviewThread": {"thread": {"id": "PRRT_new", "comments": {"nodes": [{"id": "PRRC_new"}]}}}}`)
 			})
 			id, err := c.AddReviewThread(context.Background(), "PRR_1", tt.in)
 			if err != nil {
 				t.Fatalf("AddReviewThread: %v", err)
 			}
-			if id != "PRRT_new" {
-				t.Errorf("id = %q, want PRRT_new", id)
+			if id != "PRRC_new" {
+				t.Errorf("id = %q, want the comment id PRRC_new", id)
 			}
 			if q := ft.requests()[0].Query; !strings.Contains(q, "addPullRequestReviewThread(input: $input)") {
 				t.Errorf("query = %q", q)
@@ -245,13 +255,19 @@ func TestAddReviewThread(t *testing.T) {
 	}
 }
 
-func TestAddReviewThreadNullThread(t *testing.T) {
-	c, _ := newTestClient(t, func(gqlRequest) reply {
-		return okReply(`{"addPullRequestReviewThread": {"thread": null}}`)
-	})
-	_, err := c.AddReviewThread(context.Background(), "PRR_1", ReviewThreadInput{Path: "a.go", Body: "x", Line: 1, Side: SideRight})
-	if err == nil {
-		t.Fatal("err = nil, want an error for a null thread")
+func TestAddReviewThreadNoCommentID(t *testing.T) {
+	for name, data := range map[string]string{
+		"null thread": `{"addPullRequestReviewThread": {"thread": null}}`,
+		"no comments": `{"addPullRequestReviewThread": {"thread": {"id": "PRRT_1", "comments": {"nodes": []}}}}`,
+		"empty id":    `{"addPullRequestReviewThread": {"thread": {"id": "PRRT_1", "comments": {"nodes": [{"id": ""}]}}}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, _ := newTestClient(t, func(gqlRequest) reply { return okReply(data) })
+			_, err := c.AddReviewThread(context.Background(), "PRR_1", ReviewThreadInput{Path: "a.go", Body: "x", Line: 1, Side: SideRight})
+			if err == nil || !strings.Contains(err.Error(), "no comment id") {
+				t.Fatalf("err = %v, want an error for a missing comment id", err)
+			}
+		})
 	}
 }
 
@@ -279,12 +295,12 @@ func TestPendingReview(t *testing.T) {
 		{
 			name: "comments",
 			data: `{"node": {"reviews": {"nodes": [{"id": "PRR_p", "viewerDidAuthor": true, "commit": {"oid": "abc123"},
-				"comments": {"nodes": [
-					{"path": "a.go", "body": "fix", "line": 12, "originalLine": 12, "startLine": 10, "subjectType": "LINE"},
-					{"path": "b.go", "body": "whole file", "line": null, "originalLine": null, "startLine": null, "subjectType": "FILE"}]}}]}}}`,
+				"comments": {"pageInfo": {"hasNextPage": false, "endCursor": "c1"}, "nodes": [
+					{"id": "C_1", "path": "a.go", "body": "fix", "line": 12, "originalLine": 12, "startLine": 10, "originalStartLine": 9, "subjectType": "LINE"},
+					{"id": "C_2", "path": "b.go", "body": "whole file", "line": null, "originalLine": null, "startLine": null, "subjectType": "FILE"}]}}]}}}`,
 			want: PendingReview{ID: "PRR_p", CommitOID: "abc123", Comments: []PendingComment{
-				{Path: "a.go", Body: "fix", Line: 12, OriginalLine: 12, StartLine: 10},
-				{Path: "b.go", Body: "whole file", File: true},
+				{ID: "C_1", Path: "a.go", Body: "fix", Line: 12, OriginalLine: 12, StartLine: 10, OriginalStartLine: 9},
+				{ID: "C_2", Path: "b.go", Body: "whole file", File: true},
 			}},
 			wantOK: true,
 		},
@@ -306,6 +322,105 @@ func TestPendingReview(t *testing.T) {
 			req := ft.requests()[0]
 			if req.Variables["id"] != "PR_1" || !strings.Contains(req.Query, "states: [PENDING]") {
 				t.Errorf("request = %+v", req)
+			}
+		})
+	}
+}
+
+// commentPage returns a comments connection with one comment for each id.
+func commentPage(next string, ids ...string) string {
+	nodes := make([]string, len(ids))
+	for i, id := range ids {
+		nodes[i] = fmt.Sprintf(`{"id": %q, "path": "a.go", "body": "b", "line": %d, "originalLine": null, "startLine": null, "subjectType": "LINE"}`, id, i+1)
+	}
+	return fmt.Sprintf(`{"pageInfo": {"hasNextPage": %v, "endCursor": %q}, "nodes": [%s]}`, next != "", next, strings.Join(nodes, ", "))
+}
+
+// TestPendingReviewAllPages checks that the lookup reads the comments
+// after the first page.
+func TestPendingReviewAllPages(t *testing.T) {
+	c, ft := newTestClient(t, func(req gqlRequest) reply {
+		switch req.Variables["after"] {
+		case nil:
+			return okReply(`{"node": {"reviews": {"nodes": [{"id": "PRR_p", "viewerDidAuthor": true, "commit": {"oid": "abc"},
+				"comments": ` + commentPage("cur1", "C_1", "C_2") + `}]}}}`)
+		case "cur1":
+			return okReply(`{"node": {"state": "PENDING", "body": "", "commit": {"oid": "abc"}, "comments": ` + commentPage("cur2", "C_3") + `}}`)
+		default:
+			return okReply(`{"node": {"state": "PENDING", "body": "", "commit": {"oid": "abc"}, "comments": ` + commentPage("", "C_4") + `}}`)
+		}
+	})
+	got, ok, err := c.PendingReview(context.Background(), "PR_1")
+	if err != nil || !ok {
+		t.Fatalf("PendingReview = %v %v", ok, err)
+	}
+	var ids []string
+	for _, cm := range got.Comments {
+		ids = append(ids, cm.ID)
+	}
+	if strings.Join(ids, ",") != "C_1,C_2,C_3,C_4" {
+		t.Fatalf("comment ids = %v", ids)
+	}
+	reqs := ft.requests()
+	if len(reqs) != 3 || reqs[1].Variables["id"] != "PRR_p" || reqs[2].Variables["after"] != "cur2" {
+		t.Fatalf("requests = %+v", reqs)
+	}
+	if !strings.Contains(reqs[1].Query, "comments(first: 100, after: $after)") {
+		t.Fatalf("page query = %q", reqs[1].Query)
+	}
+}
+
+func TestPendingReviewPageErrors(t *testing.T) {
+	first := okReply(`{"node": {"reviews": {"nodes": [{"id": "PRR_p", "viewerDidAuthor": true, "commit": null,
+		"comments": ` + commentPage("cur1", "C_1") + `}]}}}`)
+	for name, page := range map[string]reply{
+		"review gone": okReply(`{"node": null}`),
+		"error":       {status: http.StatusOK, body: `{"data": null, "errors": [{"type": "FORBIDDEN", "message": "no access"}]}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, _ := newTestClient(t, func(req gqlRequest) reply {
+				if req.Variables["after"] == nil {
+					return first
+				}
+				return page
+			})
+			if _, ok, err := c.PendingReview(context.Background(), "PR_1"); err == nil || ok {
+				t.Fatalf("PendingReview = %v %v, want an error", ok, err)
+			}
+		})
+	}
+}
+
+func TestReview(t *testing.T) {
+	c, ft := newTestClient(t, func(req gqlRequest) reply {
+		if req.Variables["after"] == nil {
+			return okReply(`{"node": {"state": "COMMENTED", "body": "lgtm", "url": "https://github.com/acme/api/pull/7#pullrequestreview-1", "commit": {"oid": "abc"}, "comments": ` + commentPage("cur1", "C_1") + `}}`)
+		}
+		return okReply(`{"node": {"state": "COMMENTED", "body": "lgtm", "url": "https://github.com/acme/api/pull/7#pullrequestreview-1", "commit": {"oid": "abc"}, "comments": ` + commentPage("", "C_2") + `}}`)
+	})
+	got, found, err := c.Review(context.Background(), "PRR_1")
+	if err != nil || !found {
+		t.Fatalf("Review = %v %v", found, err)
+	}
+	if got.State != "COMMENTED" || got.Body != "lgtm" || got.CommitOID != "abc" || len(got.Comments) != 2 || got.Comments[1].ID != "C_2" ||
+		got.URL != "https://github.com/acme/api/pull/7#pullrequestreview-1" {
+		t.Fatalf("Review = %+v", got)
+	}
+	if reqs := ft.requests(); len(reqs) != 2 || reqs[0].Variables["id"] != "PRR_1" {
+		t.Fatalf("requests = %+v", reqs)
+	}
+}
+
+func TestReviewNotFound(t *testing.T) {
+	for name, body := range map[string]string{
+		"null node":       `{"data": {"node": null}}`,
+		"NOT_FOUND error": `{"data": {"node": null}, "errors": [{"type": "NOT_FOUND", "path": ["node"], "message": "Could not resolve to a node with the global id of 'PRR_x'."}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, _ := newTestClient(t, func(gqlRequest) reply { return reply{status: http.StatusOK, body: body} })
+			_, found, err := c.Review(context.Background(), "PRR_x")
+			if err != nil || found {
+				t.Errorf("Review = %v %v, want not found and no error", found, err)
 			}
 		})
 	}
@@ -363,6 +478,10 @@ func TestMutationErrorsPassThrough(t *testing.T) {
 			return err
 		},
 		"pending": func(c *Client) error { _, _, err := c.PendingReview(context.Background(), "PR_1"); return err },
+		"review":  func(c *Client) error { _, _, err := c.Review(context.Background(), "PRR_1"); return err },
+		"delete comment": func(c *Client) error {
+			return c.DeleteReviewComment(context.Background(), "PRRC_1")
+		},
 	}
 	for name, call := range calls {
 		t.Run(name, func(t *testing.T) {

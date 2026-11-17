@@ -109,8 +109,7 @@ Global keys:
 |---|---|
 | `ctrl+r` | Refresh now. |
 | `?` | Show the help. |
-| `q` | Quit. argus asks first if a dialog has text that you did not send. |
-| `ctrl+c` | Quit. |
+| `q` / `ctrl+c` | Quit. argus asks first if a dialog has text that you did not send. |
 | `tab` | Switch the pane. |
 | `h` / `l` | Focus the list pane / the detail pane. |
 | `esc` | Close a dialog. |
@@ -132,6 +131,7 @@ List pane:
 | `u` | Filter by author. |
 | `m` | Load 20 more PRs in an org or Personal section. |
 
+The filter keys `a`, `d`, `b`, and `u` apply to every section except My PRs.
 The cursor keys only move the cursor. They do not load a PR.
 The list marks the opened PR with `●`.
 
@@ -155,7 +155,7 @@ With no opened PR, they show "open a PR with enter".
 | Key | Action |
 |---|---|
 | `A` | Approve. |
-| `M` | Merge. The dialog keeps the last merge method for each repo. With pending checks, the dialog enables auto-merge. |
+| `M` | Merge. The dialog keeps the last merge method for each repo. If branch protection blocks the merge and the checks are pending, the dialog enables auto-merge. |
 | `f` / `F` | Rerun the failed checks / all checks. |
 | `c` | Comment. |
 | `r` | Reply to a thread. |
@@ -171,9 +171,10 @@ The poller works in this sequence:
 
 1. Every 60 seconds, or the `X-Poll-Interval` value, argus sends `GET /notifications` with `If-Modified-Since`. A `304` reply costs no rate limit.
 2. A `200` reply with new threads starts a full refresh. This refresh waits until `min_refresh_gap` passed since the start of the last full refresh.
-3. The `refresh_interval` timer, `ctrl+r`, and `m` start a full refresh at once.
-4. After a failed refresh, argus keeps the last data. It tries again after 1, 2, 4, and at most 10 minutes.
-5. If fewer than 200 GraphQL points remain, argus stops the full refresh until the rate limit resets.
+3. The `refresh_interval` timer and `ctrl+r` start a full refresh. `ctrl+r` does not wait for `min_refresh_gap` or for the backoff.
+4. After a failed refresh, argus keeps the last data. It tries again after 1, 2, 4, 8, and then 10 minutes.
+5. If fewer than 200 GraphQL points remain, argus stops the full refresh until the rate limit resets. This also applies to `ctrl+r` and to a retry after a failed refresh.
+6. `m` loads one more page of one section at once. It does not start a full refresh.
 
 One search page of 20 PRs costs 11 GraphQL points. One page of 100 PRs costs 54 points.
 These numbers come from a measurement on 2026-11-16 with the `rateLimit { cost }` field. Thus argus reads pages of 20.
@@ -200,7 +201,7 @@ On the first run, argus records the state and sends no notifications.
 1. argus finds the clone. It uses the `[repos]` path first, then `<repo_root>/<owner>/<repo>`.
 2. If no clone exists, argus asks before it runs `gh repo clone`.
 3. argus fetches the PR head and the base branch.
-4. argus makes a detached worktree at `<clone>/.worktrees/argus-pr-<n>`. It moves an existing worktree to the new head only if the tree is clean.
+4. argus makes a detached worktree at `<clone>/.worktrees/argus-pr-<n>`. It moves an existing worktree to the new head only if the tree is clean. If the tree has changes, argus keeps the old commit and shows a warning.
 5. Before the first worktree, argus adds `.worktrees/` to the `info/exclude` file of the clone. An error there shows a warning only.
 
 `v` then opens revdiff in an agterm overlay on the diff from the merge base to the PR head:
@@ -210,7 +211,11 @@ On the first run, argus records the state and sends no notifications.
 - A line comment outside every diff hunk goes into the review body as `path:L — text`. The dialog marks these comments.
 - If the PR head moved after the checkout, the dialog shows a warning.
 - If the submit fails, argus keeps the annotation file. The next `v` loads it into revdiff again.
-- A retry reuses your pending review on GitHub and does not add a thread two times.
+- A retry reuses your pending review on GitHub and does not add a thread two times. If you edit or delete an annotation before the retry, argus deletes the old draft comment that it added. argus deletes a draft only if its text on GitHub is still the text that argus sent.
+- If your pending review has a draft comment that argus did not add, or a draft that you changed on github.com, argus does not submit. Delete that draft or submit the pending review on GitHub first.
+- argus never posts a second review automatically. If an earlier submit reached GitHub but its reply did not come back, the next `ctrl+s` posts nothing. If that review has the same commit, event, body, and comments, argus shows a success. Otherwise argus shows the review URL and keeps your annotations. Check that review on GitHub.
+- `ctrl+x` in the review dialog asks for a confirmation, then discards the local annotations and the review file. It does not change GitHub.
+- `esc` does not close the review dialog while the submit runs.
 
 `p` opens a new agterm session in the `reviews` workspace. The session runs `claude '/pr <url>'` in the worktree through your login shell.
 
@@ -224,10 +229,11 @@ argus keeps its state in `~/.local/state/argus/`:
 |---|---|
 | `seen.json` | The PR state of the last refresh. The notifications compare against it. |
 | `merge-methods.json` | The last merge method for each repo. |
-| `pr-<owner>-<repo>-<n>.md` | The revdiff annotations of a review that is not submitted. |
-| `pr-<owner>-<repo>-<n>.body.md` | The PR body for revdiff. |
+| `pr-<owner>+<repo>+<n>.md` | The revdiff annotations of a review that is not submitted. |
+| `pr-<owner>+<repo>+<n>.body.md` | The PR body for revdiff. |
+| `pr-<owner>+<repo>+<n>.review.json` | The pending review of a submit, and the id, path, lines, and text of each draft comment that argus added to it. |
 
-argus deletes the annotation file and the body file after a successful submit.
+argus deletes the annotation file, the body file, and the review file after a successful submit and after `ctrl+x` in the review dialog.
 
 ## Open manual checks
 

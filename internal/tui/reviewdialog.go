@@ -19,7 +19,11 @@ import (
 type Reviewer interface {
 	Prepare(ctx context.Context, pr model.PR) (review.Session, error)
 	Open(ctx context.Context, s review.Session) (review.Result, error)
-	Submit(ctx context.Context, s review.Session, sub review.Submission) error
+	// Submit returns a note for the status line after a success.
+	Submit(ctx context.Context, s review.Session, sub review.Submission) (string, error)
+	// Discard removes the annotation file, the body file, and the review
+	// record of the session. It does not change GitHub.
+	Discard(s review.Session) error
 }
 
 // revdiffDoneMsg carries the result of one revdiff run.
@@ -80,12 +84,17 @@ func (m *Model) handleRevdiffDone(msg revdiffDoneMsg) tea.Cmd {
 	r, s := m.reviewer, msg.session
 	d.submit = func(d *reviewDialog, sub review.Submission) tea.Cmd {
 		return m.action(d, id, "review "+ref, true, func(ctx context.Context) (string, error) {
-			return "", r.Submit(ctx, s, sub)
+			return r.Submit(ctx, s, sub)
+		})
+	}
+	d.discard = func(d *reviewDialog) tea.Cmd {
+		return m.action(d, id, "discard local annotations of "+ref, false, func(context.Context) (string, error) {
+			return "", r.Discard(s)
 		})
 	}
 	m.dialogs = append(m.dialogs, d)
-	if msg.session.Worktree.ExcludeErr != nil {
-		return m.status.SetMessage(withWarning("revdiff "+ref+": review dialog open", msg.session.Worktree))
+	if wt := msg.session.Worktree; wt.Dirty || wt.ExcludeErr != nil {
+		return m.status.SetMessage(withWarning("revdiff "+ref+": review dialog open", wt))
 	}
 	return nil
 }
@@ -112,7 +121,11 @@ const reviewListLines = 8
 
 // reviewDialog shows the revdiff annotations and submits them as one
 // review. tab selects the event, enter adds a new line to the body, ctrl+s
-// submits, and esc cancels. The annotation file stays after a cancel.
+// submits, and esc cancels. The annotation file stays after a cancel. esc
+// does not close the dialog while the submit runs: the submit keeps the
+// session files until it ends, and a cancel cannot stop it. ctrl+x asks,
+// and y then discards the annotation file and the review record. It is the
+// way out after a submit that is already on GitHub with other content.
 type reviewDialog struct {
 	session review.Session
 	result  review.Result
@@ -120,10 +133,15 @@ type reviewDialog struct {
 	event   int
 	text    []rune
 	sending bool
-	err     error
+	// confirming is true while the dialog asks before the discard.
+	confirming bool
+	// discarding is true while the discard runs. sending is true then too.
+	discarding bool
+	err        error
 	// headNow returns the current head SHA of the PR, or "".
 	headNow func() string
 	submit  func(d *reviewDialog, sub review.Submission) tea.Cmd
+	discard func(d *reviewDialog) tea.Cmd
 }
 
 func newReviewDialog(s review.Session, res review.Result, ownPR bool) *reviewDialog {
@@ -136,13 +154,28 @@ func newReviewDialog(s review.Session, res review.Result, ownPR bool) *reviewDia
 
 func (d *reviewDialog) Update(msg tea.KeyPressMsg) (Dialog, tea.Cmd, bool) {
 	s := msg.String()
-	if s == "esc" || s == "ctrl+c" {
+	if d.sending {
+		// ctrl+c goes to the root model, which asks before it quits.
+		return d, nil, s != "ctrl+c"
+	}
+	if s == "ctrl+c" {
 		return d, nil, false
 	}
-	if d.sending {
-		return d, nil, true
+	if d.confirming {
+		// Only y discards. Each other key keeps the files.
+		d.confirming = false
+		if s != "y" {
+			return d, nil, true
+		}
+		d.sending, d.discarding, d.err = true, true, nil
+		return d, d.discard(d), true
+	}
+	if s == "esc" {
+		return d, nil, false
 	}
 	switch s {
+	case "ctrl+x":
+		d.confirming = true
 	case "tab":
 		d.event = (d.event + 1) % len(d.events)
 	case "shift+tab":
@@ -173,7 +206,7 @@ func (d *reviewDialog) paste(text string) {
 	}
 }
 
-func (d *reviewDialog) failed(err error) { d.sending, d.err = false, err }
+func (d *reviewDialog) failed(err error) { d.sending, d.discarding, d.err = false, false, err }
 
 func (d *reviewDialog) Unsent() bool { return strings.TrimSpace(string(d.text)) != "" }
 
@@ -232,10 +265,16 @@ func (d *reviewDialog) View(width int) string {
 	if d.err != nil {
 		lines = append(lines, ansi.Wrap("Error: "+firstLine(d.err.Error()), width, ""))
 	}
-	if d.sending {
+	switch {
+	case d.discarding:
+		lines = append(lines, "Discarding…")
+	case d.sending:
 		lines = append(lines, "Submitting…")
-	} else {
-		lines = append(lines, "[tab] event  [ctrl+s] submit  [enter] new line  [esc] cancel")
+	case d.confirming:
+		lines = append(lines, ansi.Wrap("Discard the local annotations and the review record of "+prRef(pr)+
+			"? argus does not change GitHub. [y] discard  [any other key] keep", width, ""))
+	default:
+		lines = append(lines, ansi.Wrap("[tab] event  [ctrl+s] submit  [ctrl+x] discard  [enter] new line  [esc] cancel", width, ""))
 	}
 	return strings.Join(lines, "\n")
 }

@@ -307,6 +307,8 @@ func (p *Poller) refresh(ctx context.Context, now time.Time) {
 		if ctx.Err() != nil {
 			return
 		}
+		// The scopes before the failure can report a low rate limit.
+		p.notePause(rl)
 		p.failures++
 		p.retryAt = now.Add(backoff(p.failures))
 		p.send(ctx, Update{Err: fmt.Errorf("refresh: %w", err)})
@@ -320,7 +322,8 @@ func (p *Poller) refresh(ctx context.Context, now time.Time) {
 }
 
 // fetchAll reads every scope. A paged scope reads the page count that the
-// user loaded.
+// user loaded. The rate limit is the value after the last scope that
+// succeeded, also when a later scope fails.
 func (p *Poller) fetchAll(ctx context.Context) ([]Section, gh.RateLimit, error) {
 	sections := make([]Section, 0, len(p.scopes))
 	states := make(map[Scope]scopeState, len(p.scopes))
@@ -339,7 +342,7 @@ func (p *Poller) fetchAll(ctx context.Context) ([]Section, gh.RateLimit, error) 
 			res, err = p.fetchPages(ctx, p.query(s), p.state[s].pages)
 		}
 		if err != nil {
-			return nil, gh.RateLimit{}, fmt.Errorf("%s: %w", s, err)
+			return nil, rl, fmt.Errorf("%s: %w", s, err)
 		}
 		rl = res.RateLimit
 		sections = append(sections, Section{Scope: s, PRs: res.PRs, Total: res.IssueCount})
@@ -406,10 +409,15 @@ func (p *Poller) loadMore(ctx context.Context, now time.Time, s Scope) {
 	p.sendSnapshot(ctx, now)
 }
 
-// noteRateLimit stores rl and starts the pause when the remaining points
-// fall below RateLimitFloor.
+// noteRateLimit stores rl in the snapshot and calls notePause.
 func (p *Poller) noteRateLimit(rl gh.RateLimit) {
 	p.snapshot.RateLimit = rl
+	p.notePause(rl)
+}
+
+// notePause starts the pause when the remaining points fall below
+// RateLimitFloor. A zero rl has no ResetAt and starts no pause.
+func (p *Poller) notePause(rl gh.RateLimit) {
 	if rl.Remaining < RateLimitFloor && rl.ResetAt.After(p.pausedUntil) {
 		p.pausedUntil = rl.ResetAt
 	}

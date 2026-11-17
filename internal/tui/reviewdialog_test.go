@@ -26,9 +26,12 @@ type fakeReviewer struct {
 	result     review.Result
 	openErr    error
 	submitErr  error
+	submitNote string
 	subs       []review.Submission
 	block      chan struct{}
 	excludeErr error
+	dirty      bool
+	discardErr error
 }
 
 func (f *fakeReviewer) record(s string) {
@@ -48,7 +51,7 @@ func (f *fakeReviewer) Prepare(_ context.Context, pr model.PR) (review.Session, 
 	if f.prepareErr != nil {
 		return review.Session{}, f.prepareErr
 	}
-	return review.Session{PR: pr, Worktree: review.Worktree{ExcludeErr: f.excludeErr},
+	return review.Session{PR: pr, Worktree: review.Worktree{ExcludeErr: f.excludeErr, Dirty: f.dirty},
 		HeadSHA: pr.HeadSHA, MergeBase: "mb1", AnnotationFile: "/state/a.md"}, nil
 }
 
@@ -60,12 +63,20 @@ func (f *fakeReviewer) Open(_ context.Context, s review.Session) (review.Result,
 	return f.result, f.openErr
 }
 
-func (f *fakeReviewer) Submit(_ context.Context, s review.Session, sub review.Submission) error {
+func (f *fakeReviewer) Submit(_ context.Context, s review.Session, sub review.Submission) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, "Submit "+s.PR.ID+" "+s.HeadSHA)
 	f.subs = append(f.subs, sub)
-	return f.submitErr
+	if f.submitErr != nil {
+		return "", f.submitErr
+	}
+	return f.submitNote, nil
+}
+
+func (f *fakeReviewer) Discard(s review.Session) error {
+	f.record("Discard " + s.PR.ID + " " + s.AnnotationFile)
+	return f.discardErr
 }
 
 // reviewPR is actionPR with a body and a base branch.
@@ -127,6 +138,28 @@ func TestReviewKeyShowsExcludeWarning(t *testing.T) {
 		t.Fatalf("dialogs %d, want the review dialog", env.m.Dialogs())
 	}
 	if msg := env.m.Status().Message(); msg != "revdiff acme/api#7: review dialog open; warning: "+warn.Error() {
+		t.Fatalf("message %q", msg)
+	}
+}
+
+// TestReviewKeyShowsDirtyWarning checks that a dirty worktree shows a
+// warning in the status bar and does not stop the review.
+func TestReviewKeyShowsDirtyWarning(t *testing.T) {
+	const warn = "; warning: the worktree has local changes, so argus did not move it to the PR head"
+	r := &fakeReviewer{dirty: true}
+	env := newReviewEnv(t, reviewPR(), r)
+	env.press("v")
+	if msg := env.m.Status().Message(); msg != "revdiff acme/api#7: no annotations"+warn {
+		t.Fatalf("message %q", msg)
+	}
+
+	r = &fakeReviewer{dirty: true, result: annotated}
+	env = newReviewEnv(t, reviewPR(), r)
+	env.press("v")
+	if env.m.Dialogs() != 1 {
+		t.Fatalf("dialogs %d, want the review dialog", env.m.Dialogs())
+	}
+	if msg := env.m.Status().Message(); msg != "revdiff acme/api#7: review dialog open"+warn {
 		t.Fatalf("message %q", msg)
 	}
 }
@@ -391,5 +424,143 @@ func TestReviewDialogTeatest(t *testing.T) {
 	defer r.mu.Unlock()
 	if len(r.subs) != 1 || r.subs[0].Event != gh.ReviewApprove {
 		t.Fatalf("submissions %+v", r.subs)
+	}
+}
+
+func TestReviewDialogSubmitNote(t *testing.T) {
+	r := &fakeReviewer{result: annotated, submitNote: "; removed 1 outdated draft comments"}
+	env := newReviewEnv(t, reviewPR(), r)
+	env.press("v")
+	env.send(ctrlS)
+	if msg := env.m.Status().Message(); msg != "review acme/api#7: done; removed 1 outdated draft comments" {
+		t.Fatalf("message %q", msg)
+	}
+}
+
+// TestReviewDialogEscWhileSubmitting checks that esc does not close the
+// dialog while the submit runs, so that v cannot start a second revdiff
+// run on the same session files.
+func TestReviewDialogEscWhileSubmitting(t *testing.T) {
+	r := &fakeReviewer{result: annotated}
+	env := newReviewEnv(t, reviewPR(), r)
+	env.press("v")
+	_, submit := env.m.Update(ctrlS)
+	env.press("esc", "v")
+	d, ok := env.m.topDialog().(*reviewDialog)
+	if !ok || !d.sending || env.m.Dialogs() != 1 {
+		t.Fatalf("dialogs %d, top %T", env.m.Dialogs(), env.m.topDialog())
+	}
+	if got := r.Calls(); len(got) != 2 {
+		t.Fatalf("calls %q, want only the first Prepare and Open", got)
+	}
+	if !strings.Contains(env.dialogText(), "Submitting…") || string(d.text) != "" {
+		t.Fatalf("dialog:\n%s", env.dialogText())
+	}
+
+	drive(env.m, submit)
+	if env.m.Dialogs() != 0 || env.m.Status().Message() != "review acme/api#7: done" {
+		t.Fatalf("dialogs %d, message %q", env.m.Dialogs(), env.m.Status().Message())
+	}
+}
+
+// TestReviewDialogResultUnderQuitConfirm checks the submit result when the
+// quit confirmation is over the review dialog.
+func TestReviewDialogResultUnderQuitConfirm(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(fmt.Sprintf("fail=%v", fail), func(t *testing.T) {
+			r := &fakeReviewer{result: annotated}
+			if fail {
+				r.submitErr = errors.New("boom")
+			}
+			env := newReviewEnv(t, reviewPR(), r)
+			env.press("v")
+			env.typeText("body")
+			_, submit := env.m.Update(ctrlS)
+			env.press("ctrl+c")
+			if _, ok := env.m.topDialog().(*confirmQuitDialog); !ok || env.m.Dialogs() != 2 {
+				t.Fatalf("dialogs %d, top %T", env.m.Dialogs(), env.m.topDialog())
+			}
+
+			drive(env.m, submit)
+			if _, ok := env.m.topDialog().(*confirmQuitDialog); !ok {
+				t.Fatalf("top %T, want the quit confirmation", env.m.topDialog())
+			}
+			if !fail {
+				if env.m.Dialogs() != 1 || env.m.Status().Message() != "review acme/api#7: done" {
+					t.Fatalf("dialogs %d, message %q", env.m.Dialogs(), env.m.Status().Message())
+				}
+				return
+			}
+			if env.m.Dialogs() != 2 || env.m.Status().Message() != "review acme/api#7 failed: boom" {
+				t.Fatalf("dialogs %d, message %q", env.m.Dialogs(), env.m.Status().Message())
+			}
+			env.press("n")
+			d, ok := env.m.topDialog().(*reviewDialog)
+			if !ok || d.sending || !strings.Contains(env.dialogText(), "Error: boom") {
+				t.Fatalf("top %T:\n%s", env.m.topDialog(), env.dialogText())
+			}
+			env.press("esc")
+			if env.m.Dialogs() != 0 {
+				t.Fatalf("%d dialogs open after esc", env.m.Dialogs())
+			}
+		})
+	}
+}
+
+var ctrlX = tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl}
+
+// TestReviewDialogDiscard checks that ctrl+x discards the session files
+// only after y, and that each other key keeps them.
+func TestReviewDialogDiscard(t *testing.T) {
+	r := &fakeReviewer{result: annotated, submitErr: errors.New("an earlier submit from argus is on GitHub; press ctrl+x to discard")}
+	env := newReviewEnv(t, reviewPR(), r)
+	env.press("v")
+	if got := env.dialogText(); !strings.Contains(got, "[ctrl+x] discard") {
+		t.Fatalf("help does not show ctrl+x:\n%s", got)
+	}
+	env.typeText("body")
+	env.send(ctrlS)
+	if got := env.dialogText(); !strings.Contains(got, "press ctrl+x to") {
+		t.Fatalf("dialog after the error:\n%s", got)
+	}
+
+	for _, k := range []string{"n", "esc", "x"} {
+		env.send(ctrlX)
+		if got := env.dialogText(); !strings.Contains(got, "Discard the local annotations and the review record of acme/api#7?") {
+			t.Fatalf("no confirmation:\n%s", got)
+		}
+		env.press(k)
+		if env.m.Dialogs() != 1 || slices.ContainsFunc(r.Calls(), func(c string) bool { return strings.HasPrefix(c, "Discard") }) {
+			t.Fatalf("key %q: dialogs %d, calls %q", k, env.m.Dialogs(), r.Calls())
+		}
+		if got := env.dialogText(); strings.Contains(got, "Discard the local") || !strings.Contains(got, "body█") {
+			t.Fatalf("key %q: dialog:\n%s", k, got)
+		}
+	}
+
+	env.send(ctrlX)
+	env.press("y")
+	if got := r.Calls(); got[len(got)-1] != "Discard PR_1 /state/a.md" {
+		t.Fatalf("calls %q", got)
+	}
+	if env.m.Dialogs() != 0 || env.m.Status().Message() != "discard local annotations of acme/api#7: done" {
+		t.Fatalf("dialogs %d, message %q", env.m.Dialogs(), env.m.Status().Message())
+	}
+}
+
+func TestReviewDialogDiscardError(t *testing.T) {
+	r := &fakeReviewer{result: annotated, discardErr: errors.New("remove /state/a.md: permission denied")}
+	env := newReviewEnv(t, reviewPR(), r)
+	env.press("v")
+	_, cmd := env.m.Update(ctrlX)
+	drive(env.m, cmd)
+	_, discard := env.m.Update(key("y"))
+	if got := env.dialogText(); !strings.Contains(got, "Discarding…") {
+		t.Fatalf("dialog while the discard runs:\n%s", got)
+	}
+	drive(env.m, discard)
+	d, ok := env.m.topDialog().(*reviewDialog)
+	if !ok || d.sending || d.discarding || !strings.Contains(env.dialogText(), "Error: remove /state/a.md: permission denied") {
+		t.Fatalf("top %T, dialog:\n%s", env.m.topDialog(), env.dialogText())
 	}
 }

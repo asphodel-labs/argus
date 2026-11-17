@@ -53,11 +53,15 @@ func (m *Model) handleClaudeDone(msg claudeDoneMsg) tea.Cmd {
 	return m.status.SetMessage(withWarning("claude "+ref+": session started", msg.wt))
 }
 
-// withWarning adds the info/exclude error of the worktree to the status
-// message. The error does not stop the review or the launch.
+// withWarning adds the worktree warnings to the status message: a dirty
+// worktree that stays at its old commit, and the info/exclude error. A
+// warning does not stop the review or the launch.
 func withWarning(text string, wt review.Worktree) string {
-	if wt.ExcludeErr == nil {
-		return text
+	if wt.Dirty {
+		text += "; warning: the worktree has local changes, so argus did not move it to the PR head"
 	}
-	return text + "; warning: " + firstLine(wt.ExcludeErr.Error())
+	if wt.ExcludeErr != nil {
+		text += "; warning: " + firstLine(wt.ExcludeErr.Error())
+	}
+	return text
 }

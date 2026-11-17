@@ -32,7 +32,9 @@ var errEmptyText = errors.New("type a text first")
 const textLines = 10
 
 // textDialog is a dialog with a text input: approve, comment, and reply.
-// enter adds a new line, ctrl+s sends, and esc cancels.
+// enter adds a new line, ctrl+s sends, and esc cancels. esc does not close
+// the dialog while the text is sent: a cancel cannot stop the send, and a
+// closed dialog hides its result.
 type textDialog struct {
 	title string
 	// optional is true if the dialog can send an empty text.
@@ -46,11 +48,12 @@ type textDialog struct {
 
 func (d *textDialog) Update(msg tea.KeyPressMsg) (Dialog, tea.Cmd, bool) {
 	s := msg.String()
+	if d.sending {
+		// ctrl+c goes to the root model, which asks before it quits.
+		return d, nil, s != "ctrl+c"
+	}
 	if s == "esc" || s == "ctrl+c" {
 		return d, nil, false
-	}
-	if d.sending {
-		return d, nil, true
 	}
 	switch s {
 	case "ctrl+s":
