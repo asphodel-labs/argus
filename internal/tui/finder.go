@@ -391,12 +391,14 @@ func (f *finder) Unsent() bool { return false }
 // handleFinderPick unfolds the section and the group of the picked PR,
 // moves the cursor to it, and opens it. A PR from the GitHub search that
 // the list does not show opens with no change of the list cursor.
+// The focus moves to the detail pane, as for enter in the list.
 func (m *Model) handleFinderPick(e finderEntry) tea.Cmd {
 	l := &m.list
 	if e.row == "" {
 		entries := l.finderEntries()
 		i := slices.IndexFunc(entries, func(x finderEntry) bool { return x.pr.ID == e.pr.ID })
 		if i < 0 {
+			m.focus = FocusDetail
 			return tea.Batch(m.openPR(e.pr), m.status.SetMessage("opened "+prRef(e.pr)+" (not in the list)"))
 		}
 		e = entries[i]
@@ -405,6 +407,7 @@ func (m *Model) handleFinderPick(e finderEntry) tea.Cmd {
 		return m.status.SetMessage(prRef(e.pr) + " is not in the list")
 	}
 	pr, _ := l.Selected()
+	m.focus = FocusDetail
 	return m.openPR(pr)
 }
 

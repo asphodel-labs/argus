@@ -470,7 +470,12 @@ func (m *Model) handleListKey(msg tea.KeyPressMsg) tea.Cmd {
 		l.jumpSection(1)
 	case "[":
 		l.jumpSection(-1)
-	case "enter", "space":
+	case "enter":
+		if pr, ok := l.Selected(); ok {
+			m.focus = FocusDetail
+			return m.openPR(pr)
+		}
+	case "space":
 		if pr, ok := l.Selected(); ok {
 			return m.openPR(pr)
 		}

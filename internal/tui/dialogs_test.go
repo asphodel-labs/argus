@@ -584,7 +584,7 @@ func TestActionKeysUseOpenedPR(t *testing.T) {
 	drive(env.m, env.m.update(tea.WindowSizeMsg{Width: 160, Height: 60}))
 	env.m.list.setSnapshot(detailSnapshot(a, b))
 	// Rows: section, group, PR_1, PR_2. Open PR_1, then move to PR_2.
-	env.press("j", "j", "enter", "j")
+	env.press("j", "j", "space", "j")
 	if selectedID(t, env.m) != "PR_2" {
 		t.Fatal("setup: the cursor is not on PR_2")
 	}

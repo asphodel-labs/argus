@@ -126,7 +126,8 @@ List pane:
 | `gg` / `G` | Move to the top / the bottom. |
 | `ctrl+d` / `ctrl+u` | Move a half page down / up. |
 | `]` / `[` | Move to the next / previous section. |
-| `enter` / `space` | Open the PR in the detail pane. The focus stays in the list. |
+| `enter` | Open the PR in the detail pane and move the focus to it. |
+| `space` | Open the PR in the detail pane. The focus stays in the list. |
 | `za` | Fold the repo group or the section. |
 | `/` | Open the fuzzy finder. A PR number that matches no loaded PR offers a GitHub search. |
 | `a` | Hide the approved PRs. |
@@ -141,7 +142,7 @@ The list marks the opened PR with `●`.
 
 The fuzzy finder searches the PRs that the list shows after the filters. It also searches the folded groups and sections.
 It matches the title, the number (`812` or `#812`), the repo, and the author.
-`enter` moves the cursor to the PR, unfolds its group and section, and opens the PR.
+`enter` moves the cursor to the PR, unfolds its group and section, and opens the PR. The focus moves to the detail pane.
 
 The list loads only the newest PRs of each section, so the finder can miss an older PR.
 A query can name a PR by number: `6505`, `#6505`, `repo#6505`, or `owner/repo#6505`. The repo and the owner match without case.

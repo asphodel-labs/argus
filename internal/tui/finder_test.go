@@ -131,7 +131,7 @@ func TestFinderJumpIntoFoldedGroup(t *testing.T) {
 	if got := selectedID(t, m); got != "M1" {
 		t.Fatalf("cursor on %s, want M1", got)
 	}
-	if pr, ok := m.Opened(); !ok || pr.ID != "M1" {
+	if pr, ok := m.Opened(); !ok || pr.ID != "M1" || m.Focus() != FocusDetail {
 		t.Fatalf("opened %q %v, want M1", pr.ID, ok)
 	}
 	if m.list.folded[sectionKey(scopeMine)] || m.list.folded[groupKey(sectionKey(scopeMine), "me/tool")] {

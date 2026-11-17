@@ -487,7 +487,9 @@ func TestListEnterAndSpaceOpenPR(t *testing.T) {
 	}
 	tm.Send(key("enter"))
 	waitForText(t, tm, "acme/api#11 · alice")
-	// space opens the PR under the cursor: M2.
+	// enter moved the focus to the detail pane; h moves it back.
+	// space opens the PR under the cursor (M2) and keeps the focus.
+	tm.Send(key("h"))
 	tm.Send(key("j"))
 	tm.Send(key("j"))
 	tm.Send(key("j"))

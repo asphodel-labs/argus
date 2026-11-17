@@ -231,7 +231,7 @@ func TestFinderSearchOneMatchNotInList(t *testing.T) {
 	if env.m.Dialogs() != 0 {
 		t.Fatal("the finder is open")
 	}
-	if pr, ok := env.m.Opened(); !ok || pr.ID != "PR_6505" {
+	if pr, ok := env.m.Opened(); !ok || pr.ID != "PR_6505" || env.m.Focus() != FocusDetail {
 		t.Fatalf("opened %q %v", pr.ID, ok)
 	}
 	if !slices.Contains(env.det.calls, "PR_6505") {

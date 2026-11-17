@@ -273,7 +273,7 @@ func TestDetailCacheHit(t *testing.T) {
 	m := newDetailModel(t, det, clk.Now, detailSnapshot(a, b))
 
 	// Rows: section, group, A, B.
-	press(m, "j", "j", "enter", "j", "enter")
+	press(m, "j", "j", "space", "j", "space")
 	if n := det.callCount(); n != 2 {
 		t.Fatalf("calls = %d, want 2", n)
 	}
@@ -299,6 +299,23 @@ func TestDetailCacheHit(t *testing.T) {
 	}
 }
 
+func TestEnterFocusesDetailSpaceKeepsList(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	b := testPR("B", "acme/api", 2, "Second", "bob")
+	det := &fakeDetailer{prs: map[string]model.PR{"A": a, "B": b}}
+	m := newDetailModel(t, det, (&clock{now: listNow}).Now, detailSnapshot(a, b))
+
+	// Rows: section, group, A, B.
+	press(m, "j", "j", "space")
+	if pr, ok := m.Opened(); !ok || pr.ID != "A" || m.Focus() != FocusList {
+		t.Fatalf("after space: opened %q %v, focus %v; want A, list", pr.ID, ok, m.Focus())
+	}
+	press(m, "j", "enter")
+	if pr, ok := m.Opened(); !ok || pr.ID != "B" || m.Focus() != FocusDetail {
+		t.Fatalf("after enter: opened %q %v, focus %v; want B, detail", pr.ID, ok, m.Focus())
+	}
+}
+
 func TestDetailCursorMoveSendsNoQuery(t *testing.T) {
 	a := testPR("A", "acme/api", 1, "First", "alice")
 	b := testPR("B", "acme/api", 2, "Second", "bob")
@@ -310,7 +327,7 @@ func TestDetailCursorMoveSendsNoQuery(t *testing.T) {
 		t.Fatalf("calls after cursor moves = %d, want 0", n)
 	}
 	// The opened PR stays in the detail pane while the cursor moves.
-	press(m, "j", "j", "enter", "j")
+	press(m, "j", "j", "space", "j")
 	if pr, ok := m.Opened(); !ok || pr.ID != "A" || selectedID(t, m) != "B" {
 		t.Fatalf("opened %q %v, cursor on %s; want A open and the cursor on B", pr.ID, ok, selectedID(t, m))
 	}
