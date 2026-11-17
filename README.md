@@ -13,6 +13,8 @@ Hera made him a guardian because some of his eyes were always open. Like him, ar
 - The actions are approve, merge, rerun checks, comment, reply, react, and resolve a thread.
 - `v` opens revdiff for the PR in an agterm overlay. argus posts the annotations as one GitHub review.
 - `p` opens a Claude session with `/pr <url>` in a new agterm session.
+- The `:` command line converts a PR to a draft, marks it ready, closes it, and runs your custom commands.
+- `y` copies the PR URL.
 - A background poller refreshes the data and sends agterm notifications.
 
 argus uses the local `gh` authentication. It needs no separate token.
@@ -85,6 +87,12 @@ bot_logins = ["renovate-bot"]
 
 [colors]
 approved = "2"
+
+[[commands]]
+name = "checkout"
+key = "C"
+mode = "background"
+run = "gh pr checkout {{.Number}}"
 ```
 
 | Key | Default | Meaning |
@@ -99,6 +107,7 @@ approved = "2"
 | `[repos]` | empty | The clone path for one repo, if it is not under `repo_root`. |
 | `[owners]` | empty | A root directory for all repos of one owner. argus looks for a clone at `<dir>/<repo>`. The owner name ignores case. |
 | `[colors]` | ANSI colors | Color overrides. |
+| `[[commands]]` | empty | Custom commands. See [Custom commands](#custom-commands). |
 
 `refresh_interval` and `min_refresh_gap` use Go duration syntax, for example `90s` or `10m`. The value must be positive.
 A path that starts with `~/` is relative to your home directory.
@@ -202,8 +211,12 @@ With no opened PR, they show "open a PR with enter".
 | `+` | Add a reaction. |
 | `x` | Resolve a thread. |
 | `o` | Open the PR in the browser. |
+| `y` | Copy the PR URL to the clipboard. |
+| `:` | Open the command line. |
 | `p` | Open a Claude `/pr` session. |
 | `v` | Review with revdiff. |
+
+`y` writes the URL to the clipboard with OSC 52. On macOS, `y` also runs `pbcopy`, because some terminals block OSC 52.
 
 The mouse also works in the panes:
 
@@ -215,6 +228,69 @@ The mouse also works in the panes:
 
 argus captures the mouse, so a plain drag does not select text.
 To select text, hold `shift` while you drag. In iTerm2, hold `option`.
+
+## Command line
+
+`:` opens the command line in place of the status bar. The line shows the command names that start with the text.
+`tab` completes the name, `enter` runs the command, and `esc` closes the line.
+A command acts on the opened PR. The PR detail must be loaded.
+
+| Command | Action |
+|---|---|
+| `:draft` | Convert the PR to a draft. A draft PR shows "already a draft". |
+| `:ready` | Mark the draft PR ready for review. A PR that is not a draft shows "already ready". |
+| `:close` | Close the PR without a merge. A PR that is not open shows "the PR is not open". |
+| `:<name>` | Run the custom command with this name. |
+
+An unknown name shows "unknown command: <name>".
+The status bar shows the result of the command. After a success, the PR detail loads again.
+
+## Custom commands
+
+A `[[commands]]` table in the config adds one custom command.
+The command runs a shell template in the local clone of the PR repository.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `name` | required | The name for the command line, `:<name>`. It must be unique, must have no space, and must not be `draft`, `ready`, or `close`. |
+| `key` | empty | An optional key that runs the command. It must not be a built-in key or the key of another command. The help shows the key under the PR actions. |
+| `mode` | `background` | `background` or `overlay`. |
+| `run` | required | The shell template. |
+
+The `run` template uses the Go `text/template` syntax with these fields:
+
+| Field | Value |
+|---|---|
+| `{{.Owner}}` | The repo owner. |
+| `{{.Repo}}` | The repo name. |
+| `{{.Number}}` | The PR number. |
+| `{{.URL}}` | The PR URL. |
+| `{{.Branch}}` | The head branch. |
+| `{{.Base}}` | The base branch. |
+| `{{.Title}}` | The PR title. |
+
+argus quotes each field as one shell word. Do not put quotes around a field.
+argus stops with an error at the start if the template has a syntax error or an unknown field.
+
+The modes:
+
+- `background` runs `sh -c` with the template. The command gets no input, and argus keeps its output only for the status bar.
+- `overlay` runs the template in an agterm overlay, and argus waits until the overlay closes. Use it for a command that needs input. The overlay uses the `PATH` of argus, so `gh` and `git` resolve as in your shell. Outside agterm, an overlay command shows "overlay commands require agterm".
+
+On success, the status bar shows `<name>: done`. On a non-zero exit, it shows the last line of stderr, else the last line of stdout, else the exit code.
+
+argus finds the clone as in the [review flow](#review-flow). If no clone exists, argus asks before it clones the repo. Run the command again after the clone.
+
+For example, this command checks out the stack of a `gh stack` PR and syncs it:
+
+```toml
+[[commands]]
+name = "stack-sync"
+mode = "overlay"
+run = "gh stack checkout {{.Number}} && gh stack sync"
+```
+
+`gh stack sync` rebases and pushes the branches of the stack. It can ask for input, so the example uses `overlay`.
 
 ## Refresh and rate limit
 

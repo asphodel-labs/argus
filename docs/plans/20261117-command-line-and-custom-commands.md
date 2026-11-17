@@ -200,9 +200,9 @@
 - [x] run `make lint`
 
 ### Task 9: [Final] Update documentation
-- [ ] add the command line, `y`, and the `[[commands]]` config with a `gh stack` example to `README.md`
-- [ ] add `internal/commands` to the package layout in `CLAUDE.md`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] add the command line, `y`, and the `[[commands]]` config with a `gh stack` example to `README.md`
+- [x] add `internal/commands` to the package layout in `CLAUDE.md`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items that need manual action, for information only*
