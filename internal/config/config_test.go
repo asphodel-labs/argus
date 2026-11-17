@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 func writeConfig(t *testing.T, body string) string {
@@ -123,6 +125,125 @@ func TestLoadErrors(t *testing.T) {
 		{"bad clone protocol", `clone_protocol = "git"`, `clone_protocol "git" must be "ssh" or "https"`},
 		{"bad toml", `orgs = [`, "parse config"},
 		{"wrong type", `orgs = "acme"`, "parse config"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Load(writeConfig(t, tt.body))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Load error = %v, want it to contain %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadCommands(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg, err := Load(writeConfig(t, `
+[[commands]]
+name = "stack-sync"
+key = "S"
+run = "gh stack sync"
+
+[[commands]]
+name = "checkout"
+mode = "overlay"
+run = "git switch {{.Branch}}"
+`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Commands) != 2 {
+		t.Fatalf("len(Commands) = %d, want 2", len(cfg.Commands))
+	}
+	pr := model.PR{HeadRef: "feature/x"}
+	tests := []struct {
+		name, key, mode, script string
+	}{
+		{"stack-sync", "S", ModeBackground, "gh stack sync"},
+		{"checkout", "", ModeOverlay, "git switch 'feature/x'"},
+	}
+	for i, tt := range tests {
+		c := cfg.Commands[i]
+		if c.Name != tt.name || c.Key != tt.key || c.Mode != tt.mode {
+			t.Errorf("Commands[%d] = {%q %q %q}, want {%q %q %q}", i, c.Name, c.Key, c.Mode, tt.name, tt.key, tt.mode)
+		}
+		got, err := c.Render(pr)
+		if err != nil {
+			t.Fatalf("Render %s: %v", c.Name, err)
+		}
+		if got != tt.script {
+			t.Errorf("Render %s = %q, want %q", c.Name, got, tt.script)
+		}
+	}
+}
+
+func TestCommandRenderQuotesFields(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg, err := Load(writeConfig(t, `
+[[commands]]
+name = "all"
+run = "echo {{.Owner}} {{.Repo}} {{.Number}} {{.URL}} {{.Branch}} {{.Base}} {{.Title}}"
+`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	pr := model.PR{
+		Repo:    model.Repo{Owner: "acme", Name: "api"},
+		Number:  42,
+		URL:     "https://github.com/acme/api/pull/42",
+		HeadRef: "it's; rm -rf ~",
+		BaseRef: "main",
+		Title:   "Fix $(whoami)",
+	}
+	got, err := cfg.Commands[0].Render(pr)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	want := `echo 'acme' 'api' '42' 'https://github.com/acme/api/pull/42' 'it'\''s; rm -rf ~' 'main' 'Fix $(whoami)'`
+	if got != want {
+		t.Errorf("Render =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestLoadCommandErrors(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"empty name", `[[commands]]
+run = "true"`, "commands[0]: name is empty"},
+		{"name with space", `[[commands]]
+name = "stack sync"
+run = "true"`, `command "stack sync": name has a space`},
+		{"duplicate name", `[[commands]]
+name = "sync"
+run = "true"
+[[commands]]
+name = "sync"
+run = "false"`, `command "sync": name is not unique`},
+		{"built-in name", `[[commands]]
+name = "draft"
+run = "true"`, `command "draft": name is a built-in command`},
+		{"bad mode", `[[commands]]
+name = "sync"
+mode = "popup"
+run = "true"`, `mode "popup" must be "background" or "overlay"`},
+		{"bad template", `[[commands]]
+name = "sync"
+run = "echo {{.Branch"`, `command "sync": parse run`},
+		{"unknown field", `[[commands]]
+name = "sync"
+run = "echo {{.Head}}"`, `command "sync": render run`},
+		{"duplicate key", `[[commands]]
+name = "a"
+key = "S"
+run = "true"
+[[commands]]
+name = "b"
+key = "S"
+run = "true"`, `command "b": key "S" is also the key of command "a"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

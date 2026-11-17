@@ -119,12 +119,12 @@
 - Modify: `internal/config/config.go`
 - Modify: `internal/config/config_test.go`
 
-- [ ] add the `config.Command` struct, the `[[commands]]` TOML table, and the `Config.Commands` field
-- [ ] add the template data struct `config.CommandData` with the seven fields, and a `Render(pr model.PR)` method that quotes each field with `execx.ShellQuote`
-- [ ] check the load rules from Technical Details in `Load`
-- [ ] write tests for a valid config with two commands, the default mode, and `Render` output with a branch that has a quote
-- [ ] write tests for each load error: empty name, duplicate name, built-in name, bad mode, bad template, unknown field, duplicate key
-- [ ] run `make test`: it must pass before task 4
+- [x] add the `config.Command` struct, the `[[commands]]` TOML table, and the `Config.Commands` field
+- [x] add the template data struct `config.CommandData` with the seven fields, and a `Render(pr model.PR)` method that quotes each field with `execx.ShellQuote`
+- [x] check the load rules from Technical Details in `Load`
+- [x] write tests for a valid config with two commands, the default mode, and `Render` output with a branch that has a quote
+- [x] write tests for each load error: empty name, duplicate name, built-in name, bad mode, bad template, unknown field, duplicate key
+- [x] run `make test`: it must pass before task 4
 
 ### Task 4: Run custom commands in background or overlay mode
 

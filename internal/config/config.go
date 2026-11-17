@@ -2,18 +2,23 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"text/template"
 	"time"
+	"unicode"
 
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/asphodel-labs/argus/internal/execx"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 // Default values for optional settings.
@@ -49,6 +54,81 @@ type Config struct {
 	// of that owner is at <dir>/<repo>.
 	Owners map[string]string
 	Colors map[string]string
+	// Commands holds the custom commands of the [[commands]] tables.
+	Commands []Command
+}
+
+// Modes of a custom command.
+const (
+	// ModeBackground runs the command with sh -c and shows the result in
+	// the status bar.
+	ModeBackground = "background"
+	// ModeOverlay runs the command in an agterm overlay.
+	ModeOverlay = "overlay"
+)
+
+// builtinCommands holds the names of the built-in commands of the command
+// line. A custom command must not use one of these names.
+var builtinCommands = []string{"draft", "ready", "close"}
+
+// Command is a custom command from a [[commands]] table.
+type Command struct {
+	// Name runs the command with :name.
+	Name string
+	// Key is an optional shortcut key. It is empty if the command has no key.
+	Key string
+	// Mode is ModeBackground or ModeOverlay.
+	Mode string
+	// Run is the parsed shell template. Render fills it with the PR fields.
+	Run *template.Template
+}
+
+// CommandData holds the template fields of a custom command.
+// Each field is a quoted shell word.
+type CommandData struct {
+	Owner  string
+	Repo   string
+	Number string
+	URL    string
+	// Branch is the head branch.
+	Branch string
+	// Base is the base branch.
+	Base  string
+	Title string
+}
+
+// NewCommandData returns the template fields of pr. It quotes each field
+// with execx.ShellQuote.
+func NewCommandData(pr model.PR) CommandData {
+	return CommandData{
+		Owner:  execx.ShellQuote(pr.Repo.Owner),
+		Repo:   execx.ShellQuote(pr.Repo.Name),
+		Number: execx.ShellQuote(strconv.Itoa(pr.Number)),
+		URL:    execx.ShellQuote(pr.URL),
+		Branch: execx.ShellQuote(pr.HeadRef),
+		Base:   execx.ShellQuote(pr.BaseRef),
+		Title:  execx.ShellQuote(pr.Title),
+	}
+}
+
+// Render returns the shell script of the command for pr.
+func (c Command) Render(pr model.PR) (string, error) {
+	return execute(c.Run, NewCommandData(pr))
+}
+
+func execute(t *template.Template, data CommandData) (string, error) {
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+type fileCommand struct {
+	Name string `toml:"name"`
+	Key  string `toml:"key"`
+	Mode string `toml:"mode"`
+	Run  string `toml:"run"`
 }
 
 type fileConfig struct {
@@ -62,6 +142,7 @@ type fileConfig struct {
 	Repos           map[string]string `toml:"repos"`
 	Owners          map[string]string `toml:"owners"`
 	Colors          map[string]string `toml:"colors"`
+	Commands        []fileCommand     `toml:"commands"`
 }
 
 // DefaultPath returns ~/.config/argus/config.toml.
@@ -130,7 +211,62 @@ func Load(path string) (*Config, error) {
 	for name, color := range fc.Colors {
 		cfg.Colors[name] = color
 	}
+	cmds, err := parseCommands(fc.Commands)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Commands = cmds
 	return cfg, nil
+}
+
+// parseCommands checks the [[commands]] tables and parses their templates.
+func parseCommands(fcs []fileCommand) ([]Command, error) {
+	var cmds []Command
+	names := map[string]bool{}
+	keys := map[string]string{}
+	for i, fc := range fcs {
+		switch {
+		case fc.Name == "":
+			return nil, fmt.Errorf("commands[%d]: name is empty", i)
+		case strings.ContainsFunc(fc.Name, unicode.IsSpace):
+			return nil, fmt.Errorf("command %q: name has a space", fc.Name)
+		case names[fc.Name]:
+			return nil, fmt.Errorf("command %q: name is not unique", fc.Name)
+		}
+		for _, b := range builtinCommands {
+			if fc.Name == b {
+				return nil, fmt.Errorf("command %q: name is a built-in command", fc.Name)
+			}
+		}
+		names[fc.Name] = true
+
+		mode := fc.Mode
+		switch mode {
+		case "":
+			mode = ModeBackground
+		case ModeBackground, ModeOverlay:
+		default:
+			return nil, fmt.Errorf("command %q: mode %q must be %q or %q", fc.Name, fc.Mode, ModeBackground, ModeOverlay)
+		}
+
+		if fc.Key != "" {
+			if other, ok := keys[fc.Key]; ok {
+				return nil, fmt.Errorf("command %q: key %q is also the key of command %q", fc.Name, fc.Key, other)
+			}
+			keys[fc.Key] = fc.Name
+		}
+
+		t, err := template.New(fc.Name).Parse(fc.Run)
+		if err != nil {
+			return nil, fmt.Errorf("command %q: parse run: %w", fc.Name, err)
+		}
+		// A render with zero values finds an unknown field at load.
+		if _, err := execute(t, CommandData{}); err != nil {
+			return nil, fmt.Errorf("command %q: render run: %w", fc.Name, err)
+		}
+		cmds = append(cmds, Command{Name: fc.Name, Key: fc.Key, Mode: mode, Run: t})
+	}
+	return cmds, nil
 }
 
 // ResolveUser sets cfg.User from `gh api user` when the config has no user.
