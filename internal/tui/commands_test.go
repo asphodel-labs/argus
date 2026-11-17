@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/asphodel-labs/argus/internal/commands"
 	"github.com/asphodel-labs/argus/internal/config"
 	"github.com/asphodel-labs/argus/internal/model"
 	"github.com/asphodel-labs/argus/internal/review"
@@ -130,6 +131,40 @@ func TestCustomCommandNeedsDetail(t *testing.T) {
 	}
 	if cmds, _ := fc.runs(); len(cmds) != 0 {
 		t.Fatalf("commands %v", cmds)
+	}
+}
+
+func TestCustomCommandNeedsOpenedPR(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		run  func(e *actionEnv)
+	}{
+		{"command line", func(e *actionEnv) { e.runLine("stack-sync") }},
+		{"key", func(e *actionEnv) { e.press("S") }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			fc := &fakeCommander{}
+			env := &actionEnv{}
+			env.m = mustNew(t, Options{Commands: []config.Command{customCommand("stack-sync", "S")}, Commander: fc,
+				Styles: testStyles(t), Me: "me", Now: fixedNow})
+			env.m.list.setSnapshot(detailSnapshot(openPR()))
+			c.run(env)
+			if msg := env.m.Status().Message(); msg != "open a PR with enter" {
+				t.Fatalf("message %q", msg)
+			}
+			if cmds, _ := fc.runs(); len(cmds) != 0 {
+				t.Fatalf("commands %v", cmds)
+			}
+		})
+	}
+}
+
+func TestCustomCommandNoAgterm(t *testing.T) {
+	fc := &fakeCommander{err: commands.ErrNoAgterm}
+	env := newCommandModel(t, []config.Command{customCommand("stack-sync", "S")}, fc)
+	env.press("S")
+	if msg := env.m.Status().Message(); msg != "stack-sync failed: overlay commands require agterm" {
+		t.Fatalf("message %q", msg)
 	}
 }
 

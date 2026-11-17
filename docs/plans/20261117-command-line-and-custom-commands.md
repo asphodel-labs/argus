@@ -193,11 +193,11 @@
 - [x] run `make test`: it must pass before task 8
 
 ### Task 8: Verify acceptance criteria
-- [ ] verify `:draft`, `:ready`, `:close`, `y`, and custom commands with `:name` and a key
-- [ ] verify the edge cases: no opened PR, the detail not loaded, no clone, no agterm, a key overlap
-- [ ] run `make test`
-- [ ] run `go test -race ./...`
-- [ ] run `make lint`
+- [x] verify `:draft`, `:ready`, `:close`, `y`, and custom commands with `:name` and a key
+- [x] verify the edge cases: no opened PR, the detail not loaded, no clone, no agterm, a key overlap
+- [x] run `make test`
+- [x] run `go test -race ./...`
+- [x] run `make lint`
 
 ### Task 9: [Final] Update documentation
 - [ ] add the command line, `y`, and the `[[commands]]` config with a `gh stack` example to `README.md`
