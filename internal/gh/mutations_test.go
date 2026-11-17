@@ -215,6 +215,33 @@ func TestMutationRequestBodies(t *testing.T) {
 			wantInput: map[string]any{"assignableId": "PR_1", "assigneeIds": []any{"U_a", "U_b"}},
 		},
 		{
+			name:     "convert to draft",
+			mutation: "convertPullRequestToDraft(input: $input)",
+			data:     `{"convertPullRequestToDraft": {"pullRequest": {"id": "PR_1", "isDraft": true}}}`,
+			call: func(c *Client) error {
+				return c.ConvertToDraft(context.Background(), "PR_1")
+			},
+			wantInput: map[string]any{"pullRequestId": "PR_1"},
+		},
+		{
+			name:     "mark ready",
+			mutation: "markPullRequestReadyForReview(input: $input)",
+			data:     `{"markPullRequestReadyForReview": {"pullRequest": {"id": "PR_1", "isDraft": false}}}`,
+			call: func(c *Client) error {
+				return c.MarkReady(context.Background(), "PR_1")
+			},
+			wantInput: map[string]any{"pullRequestId": "PR_1"},
+		},
+		{
+			name:     "close",
+			mutation: "closePullRequest(input: $input)",
+			data:     `{"closePullRequest": {"pullRequest": {"id": "PR_1", "state": "CLOSED"}}}`,
+			call: func(c *Client) error {
+				return c.ClosePR(context.Background(), "PR_1")
+			},
+			wantInput: map[string]any{"pullRequestId": "PR_1"},
+		},
+		{
 			name:     "submit review with no body",
 			mutation: "submitPullRequestReview(input: $input)",
 			data:     `{"submitPullRequestReview": {"pullRequestReview": {"id": "PRR_9", "state": "CHANGES_REQUESTED"}}}`,
@@ -597,6 +624,30 @@ func TestAssigneeMutationErrors(t *testing.T) {
 			c, _ := newTestClient(t, func(gqlRequest) reply { return reply{status: http.StatusOK, body: body} })
 			if err := call(c); err == nil || !strings.Contains(err.Error(), "Resource not accessible") {
 				t.Errorf("err = %v, want the GraphQL error", err)
+			}
+		})
+	}
+}
+
+func TestStateMutationErrors(t *testing.T) {
+	const body = `{"data": null, "errors": [{"type": "UNPROCESSABLE", "message": "Pull request is already closed"}]}`
+	for name, tt := range map[string]struct {
+		call     func(c *Client) error
+		wantName string
+	}{
+		"draft": {func(c *Client) error { return c.ConvertToDraft(context.Background(), "PR_1") }, "convert to draft PR_1"},
+		"ready": {func(c *Client) error { return c.MarkReady(context.Background(), "PR_1") }, "mark ready PR_1"},
+		"close": {func(c *Client) error { return c.ClosePR(context.Background(), "PR_1") }, "close PR_1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, _ := newTestClient(t, func(gqlRequest) reply { return reply{status: http.StatusOK, body: body} })
+			err := tt.call(c)
+			var gqlErr *api.GraphQLError
+			if !errors.As(err, &gqlErr) {
+				t.Fatalf("err = %v, want GraphQLError", err)
+			}
+			if !strings.Contains(err.Error(), "Pull request is already closed") || !strings.Contains(err.Error(), tt.wantName) {
+				t.Errorf("err = %v, want the GraphQL message and %q", err, tt.wantName)
 			}
 		})
 	}

@@ -94,10 +94,10 @@
 - Modify: `internal/gh/mutations.go`
 - Modify: `internal/gh/mutations_test.go`
 
-- [ ] add `ConvertToDraft`, `MarkReady`, and `ClosePR` to `internal/gh/mutations.go` with `c.mutate`
-- [ ] write tests that check the mutation name and the `pullRequestId` input of each call
-- [ ] write tests for a GraphQL error response of each call
-- [ ] run `make test`: it must pass before task 2
+- [x] add `ConvertToDraft`, `MarkReady`, and `ClosePR` to `internal/gh/mutations.go` with `c.mutate`
+- [x] write tests that check the mutation name and the `pullRequestId` input of each call
+- [x] write tests for a GraphQL error response of each call
+- [x] run `make test`: it must pass before task 2
 
 ### Task 2: Add the head branch to the PR detail
 
