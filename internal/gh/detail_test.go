@@ -128,6 +128,20 @@ func TestPRDetailFull(t *testing.T) {
 		t.Errorf("query has no reviewRequests or assignees: %q", q)
 	}
 
+	// The entries come in position order. The entry with no visible PR is
+	// left out.
+	wantStack := model.Stack{ID: "PRS_40", Number: 40, Size: 3, Position: 2, Entries: []model.StackEntry{
+		{Position: 1, Number: 41, Title: "Add the backoff helper", State: "MERGED"},
+		{Position: 2, Number: 42, Title: "Add retry to the uploader", State: "OPEN"},
+		{Position: 3, Number: 43, Title: "Use the retry in the CLI", State: "OPEN"},
+	}}
+	if !reflect.DeepEqual(pr.Stack, wantStack) {
+		t.Errorf("stack = %+v, want %+v", pr.Stack, wantStack)
+	}
+	if q := ft.requests()[0].Query; !strings.Contains(q, "entries(first: 50)") {
+		t.Errorf("query has no stack entries: %q", q)
+	}
+
 	if got := model.DeriveStatus(pr, "me"); got != model.StatusCIFailed {
 		t.Errorf("DeriveStatus = %v, want CI failed", got)
 	}

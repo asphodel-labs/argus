@@ -27,6 +27,7 @@ const (
 	detailComments       = 100
 	detailReviewRequests = 50
 	detailAssignees      = 50
+	detailStackEntries   = 50
 )
 
 var detailQuery = fmt.Sprintf(`query PRDetail($owner: String!, $repo: String!, $number: Int!) {
@@ -108,6 +109,13 @@ var detailQuery = fmt.Sprintf(`query PRDetail($owner: String!, $repo: String!, $
         }
       }
       assignees(first: %d) { nodes { id login name } }
+      stack {
+        id
+        number
+        size
+        entries(first: %d) { nodes { position pullRequest { number title state } } }
+      }
+      stackEntry { position }
     }
   }
 }
@@ -119,7 +127,7 @@ fragment CommentFields on Comment {
   createdAt
   ... on Reactable { reactionGroups { content viewerHasReacted reactors { totalCount } } }
 }`, detailChecks, detailReviews, detailThreads, detailThreadComments, detailComments,
-	detailReviewRequests, detailAssignees)
+	detailReviewRequests, detailAssignees, detailStackEntries)
 
 type reactionGroupJSON struct {
 	Content          string `json:"content"`

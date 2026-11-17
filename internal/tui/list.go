@@ -47,6 +47,10 @@ type listRow struct {
 
 	pr     model.PR
 	status model.Status
+	// stackLine connects the rows of the PRs of one stack: "┌" on the
+	// first row, "├" on a middle row, "└" on the last row. It is empty if
+	// the row is not next to a row of the same stack.
+	stackLine string
 }
 
 // listPane is the state of the list pane: the rows, the cursor, the
@@ -191,7 +195,9 @@ func (l *listPane) visiblePRs(sec poller.Section) []model.PR {
 
 // groupByRepo groups the PRs by repository. The group with the most
 // recently updated PR comes first. Inside a group, the most recently
-// updated PR comes first. Equal times keep the snapshot order.
+// updated PR comes first. Equal times keep the snapshot order. The PRs of
+// a stack stay together in position order, at the place of the most
+// recently updated PR of the stack.
 func groupByRepo(prs []model.PR) []repoGroup {
 	var groups []repoGroup
 	idx := map[string]int{}
@@ -211,7 +217,57 @@ func groupByRepo(prs []model.PR) []repoGroup {
 	slices.SortStableFunc(groups, func(a, b repoGroup) int {
 		return b.prs[0].UpdatedAt.Compare(a.prs[0].UpdatedAt)
 	})
+	for i := range groups {
+		groups[i].prs = stackOrder(groups[i].prs)
+	}
 	return groups
+}
+
+// stackOrder moves the PRs of each stack next to each other, in position
+// order. A stack takes the place of its first PR in prs. The other PRs
+// keep their order.
+func stackOrder(prs []model.PR) []model.PR {
+	out := make([]model.PR, 0, len(prs))
+	done := map[string]bool{}
+	for i, pr := range prs {
+		id := pr.Stack.ID
+		if id == "" {
+			out = append(out, pr)
+			continue
+		}
+		if done[id] {
+			continue
+		}
+		done[id] = true
+		start := len(out)
+		for _, p := range prs[i:] {
+			if p.Stack.ID == id {
+				out = append(out, p)
+			}
+		}
+		slices.SortStableFunc(out[start:], func(a, b model.PR) int { return a.Stack.Position - b.Stack.Position })
+	}
+	return out
+}
+
+// stackLine returns the stack connector of the PR at index i of prs, which
+// is in stack order.
+func stackLine(prs []model.PR, i int) string {
+	id := prs[i].Stack.ID
+	if id == "" {
+		return ""
+	}
+	prev := i > 0 && prs[i-1].Stack.ID == id
+	next := i < len(prs)-1 && prs[i+1].Stack.ID == id
+	switch {
+	case prev && next:
+		return "├"
+	case next:
+		return "┌"
+	case prev:
+		return "└"
+	}
+	return ""
 }
 
 func (l *listPane) buildRows() []listRow {
@@ -238,10 +294,10 @@ func (l *listPane) buildRows() []listRow {
 			if l.folded[gk] {
 				continue
 			}
-			for _, pr := range g.prs {
+			for i, pr := range g.prs {
 				rows = append(rows, listRow{
 					kind: rowPR, key: key + "/" + pr.ID, section: si, scope: sec.Scope, group: gk,
-					pr: pr, status: model.DeriveStatus(pr, l.me),
+					pr: pr, status: model.DeriveStatus(pr, l.me), stackLine: stackLine(g.prs, i),
 				})
 			}
 		}
@@ -398,18 +454,26 @@ func (l *listPane) renderRow(r listRow, width int, st Styles) string {
 	return ansi.Truncate(line, width, "…")
 }
 
-// renderPR renders a PR row: the open mark, the status icon in its color,
-// the number, the title, the author, and the age. The group row above
-// shows the repository. The title is cut to fit.
+// renderPR renders a PR row: the open mark, the stack connector, the
+// status icon in its color, the number, the stack position, the title, the
+// author, and the age. The group row above shows the repository. The title
+// is cut to fit.
 func (l *listPane) renderPR(r listRow, width int, st Styles) string {
 	icon := r.status.Icon()
 	icon = st.Status[r.status].Render(icon) + strings.Repeat(" ", max(2-lipgloss.Width(icon), 0))
 	ref := "#" + strconv.Itoa(r.pr.Number)
-	indent := "    "
+	open, line := " ", " "
 	if r.pr.ID == l.opened {
-		indent = "  " + st.Title.Render("●") + " "
+		open = st.Title.Render("●")
 	}
-	left := indent + icon + " " + st.Status[r.status].Render(ref) + " " + r.pr.Title
+	if r.stackLine != "" {
+		line = st.Muted.Render(r.stackLine)
+	}
+	left := "  " + open + line + " " + icon + " " + st.Status[r.status].Render(ref) + " "
+	if s := r.pr.Stack; s.InStack() {
+		left += st.Muted.Render(fmt.Sprintf("[%d/%d]", s.Position, s.Size)) + " "
+	}
+	left += r.pr.Title
 	right := st.Muted.Render(r.pr.Author.Login + " " + age(l.now().Sub(r.pr.UpdatedAt)))
 	room := width - lipgloss.Width(right) - 1
 	if room < lipgloss.Width(left) {

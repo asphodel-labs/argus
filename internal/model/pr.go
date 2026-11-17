@@ -130,6 +130,37 @@ type PR struct {
 	// assigned to. Both come from the detail query.
 	RequestedReviewers []Actor
 	Assignees          []Actor
+
+	// Stack is the place of the PR in a GitHub stack of PRs. It is zero if
+	// the PR is not in a stack.
+	Stack Stack
+}
+
+// Stack is the place of a PR in a GitHub stack of PRs.
+type Stack struct {
+	// ID is the node ID of the stack. Number identifies the stack in its
+	// repository.
+	ID     string
+	Number int
+	// Size is the number of PRs in the stack. Position is the place of the
+	// PR: 1 is the PR closest to the base branch.
+	Size     int
+	Position int
+	// Entries holds the PRs of the stack in position order. Only the detail
+	// query fills it.
+	Entries []StackEntry
+}
+
+// InStack reports whether the PR is in a stack.
+func (s Stack) InStack() bool { return s.ID != "" }
+
+// StackEntry is one PR of a stack.
+type StackEntry struct {
+	Position int
+	Number   int
+	Title    string
+	// State is the GitHub PullRequestState: OPEN, CLOSED, or MERGED.
+	State string
 }
 
 // Check is one check run or status context on the head commit.

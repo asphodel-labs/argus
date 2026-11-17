@@ -50,6 +50,8 @@ var searchQuery = `query Search($q: String!, $first: Int!, $after: String) {
         baseRefName
         repository { name owner { login } }
         author { __typename login }
+        stack { id number size }
+        stackEntry { position }
         commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
         comments(last: 1) { totalCount nodes { author { __typename login } createdAt } }
         reviews(last: 1) { totalCount nodes { author { __typename login } createdAt submittedAt } }
@@ -113,6 +115,43 @@ func (a activityJSON) time() time.Time {
 	return a.CreatedAt
 }
 
+// stackJSON is the stack of a PR. Only the detail query reads the
+// entries.
+type stackJSON struct {
+	ID      string `json:"id"`
+	Number  int    `json:"number"`
+	Size    int    `json:"size"`
+	Entries struct {
+		Nodes []struct {
+			Position    int `json:"position"`
+			PullRequest *struct {
+				Number int    `json:"number"`
+				Title  string `json:"title"`
+				State  string `json:"state"`
+			} `json:"pullRequest"`
+		} `json:"nodes"`
+	} `json:"entries"`
+}
+
+// stack returns the place of the PR in the stack, with the entries in
+// position order. It skips an entry whose PR the viewer cannot see.
+func (s *stackJSON) stack(position int) model.Stack {
+	if s == nil {
+		return model.Stack{}
+	}
+	out := model.Stack{ID: s.ID, Number: s.Number, Size: s.Size, Position: position}
+	for _, e := range s.Entries.Nodes {
+		if e.PullRequest == nil {
+			continue
+		}
+		out.Entries = append(out.Entries, model.StackEntry{
+			Position: e.Position, Number: e.PullRequest.Number, Title: e.PullRequest.Title, State: e.PullRequest.State,
+		})
+	}
+	slices.SortStableFunc(out.Entries, func(a, b model.StackEntry) int { return a.Position - b.Position })
+	return out
+}
+
 type prSummaryJSON struct {
 	ID             string     `json:"id"`
 	Number         int        `json:"number"`
@@ -127,7 +166,11 @@ type prSummaryJSON struct {
 	HeadRefOid     string     `json:"headRefOid"`
 	BaseRefName    string     `json:"baseRefName"`
 	Author         *actorJSON `json:"author"`
-	Repository     struct {
+	Stack          *stackJSON `json:"stack"`
+	StackEntry     *struct {
+		Position int `json:"position"`
+	} `json:"stackEntry"`
+	Repository struct {
 		Name  string `json:"name"`
 		Owner struct {
 			Login string `json:"login"`
@@ -189,6 +232,9 @@ func (p prSummaryJSON) pr() model.PR {
 	}
 	if p.ReviewDecision != nil {
 		pr.ReviewDecision = model.ReviewDecision(*p.ReviewDecision)
+	}
+	if p.StackEntry != nil {
+		pr.Stack = p.Stack.stack(p.StackEntry.Position)
 	}
 	if n := len(p.Commits.Nodes); n > 0 {
 		if r := p.Commits.Nodes[n-1].Commit.StatusCheckRollup; r != nil {

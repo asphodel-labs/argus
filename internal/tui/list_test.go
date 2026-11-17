@@ -520,7 +520,7 @@ func TestListScrollKeepsCursorVisible(t *testing.T) {
 		t.Fatalf("offset = %d, want %d", m.list.offset, len(m.list.rows)-5)
 	}
 	view := ansi.Strip(m.list.view(40, m.styles, true))
-	if !strings.Contains(view, "›    ⏳ #1 Dotfiles") {
+	if !strings.Contains(view, "›     ⏳ #1 Dotfiles") {
 		t.Fatalf("cursor row not visible:\n%s", view)
 	}
 	sendKeys(m, "g", "g")

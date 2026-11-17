@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -183,6 +184,13 @@ func TestSearchSummaryFields(t *testing.T) {
 	if file := one.Threads[1]; file.Line != 0 || !file.IsResolved || file.LastComment().Author != (model.Actor{}) {
 		t.Errorf("file thread = %+v", file)
 	}
+	// The search reads the place in the stack, not the entries.
+	if want := (model.Stack{ID: "PRS_100", Number: 100, Size: 3, Position: 2}); !reflect.DeepEqual(one.Stack, want) {
+		t.Errorf("stack = %+v, want %+v", one.Stack, want)
+	}
+	if q := ft.requests()[0].Query; !strings.Contains(q, "stack { id number size }") || !strings.Contains(q, "stackEntry { position }") {
+		t.Errorf("query has no stack fields: %q", q)
+	}
 	if got := model.DeriveStatus(one, "alice"); got != model.StatusCIFailed {
 		t.Errorf("status = %v, want CI failed", got)
 	}
@@ -193,6 +201,9 @@ func TestSearchSummaryFields(t *testing.T) {
 	}
 	if !model.IsBot(two.Author, nil) {
 		t.Errorf("bot author = %+v", two.Author)
+	}
+	if two.Stack.InStack() {
+		t.Errorf("PR without a stack has stack %+v", two.Stack)
 	}
 	if two.NewestAuthor != (model.Actor{}) || len(two.Threads) != 0 {
 		t.Errorf("no activity = %+v %v", two.NewestAuthor, two.Threads)

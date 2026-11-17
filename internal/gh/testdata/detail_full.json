@@ -102,7 +102,14 @@
         "assignees": {"nodes": [
           {"id": "U_alice", "login": "alice", "name": "Alice Smith"},
           {"id": "U_dave", "login": "dave", "name": null}
-        ]}
+        ]},
+        "stack": {"id": "PRS_40", "number": 40, "size": 3, "entries": {"nodes": [
+          {"position": 3, "pullRequest": {"number": 43, "title": "Use the retry in the CLI", "state": "OPEN"}},
+          {"position": 1, "pullRequest": {"number": 41, "title": "Add the backoff helper", "state": "MERGED"}},
+          {"position": 2, "pullRequest": {"number": 42, "title": "Add retry to the uploader", "state": "OPEN"}},
+          {"position": 4, "pullRequest": null}
+        ]}},
+        "stackEntry": {"position": 2}
       }
     }
   }

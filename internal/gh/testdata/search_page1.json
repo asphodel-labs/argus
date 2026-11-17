@@ -19,6 +19,8 @@
           "baseRefName": "main",
           "repository": {"name": "api", "owner": {"login": "acme"}},
           "author": {"__typename": "User", "login": "alice"},
+          "stack": {"id": "PRS_100", "number": 100, "size": 3},
+          "stackEntry": {"position": 2},
           "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "FAILURE"}}}]},
           "comments": {"totalCount": 4, "nodes": [{"author": {"__typename": "User", "login": "bob"}, "createdAt": "2026-11-14T10:00:00Z"}]},
           "reviews": {"totalCount": 2, "nodes": [{"author": {"__typename": "User", "login": "carol"}, "createdAt": "2026-11-15T08:00:00Z", "submittedAt": "2026-11-15T11:00:00Z"}]},

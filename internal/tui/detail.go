@@ -419,6 +419,7 @@ func (b *detailBuilder) build(pr model.PR) {
 		b.add(line)
 	}
 	b.add("Merge: " + b.mergeLine(pr))
+	b.stack(pr)
 	b.add("")
 	b.checks(pr)
 	b.add("", st.Title.Render("Description"))
@@ -574,6 +575,30 @@ func (b *detailBuilder) reviewsLine(pr model.PR) string {
 		parts = append(parts, text)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// stack adds the stack of the PR: one line for each PR of the stack in
+// position order, with a mark on this PR. Without the entries it adds only
+// the position.
+func (b *detailBuilder) stack(pr model.PR) {
+	s := pr.Stack
+	if !s.InStack() {
+		return
+	}
+	st := b.d.styles
+	b.add(fmt.Sprintf("Stack %d: %d of %d", s.Number, s.Position, s.Size))
+	for _, e := range s.Entries {
+		mark := "  "
+		text := fmt.Sprintf("%d #%d %s", e.Position, e.Number, e.Title)
+		if e.Number == pr.Number {
+			mark = st.Title.Render("› ")
+			text = st.Title.Render(text)
+		}
+		if e.State != "" && e.State != "OPEN" {
+			text += " " + st.Muted.Render(strings.ToLower(e.State))
+		}
+		b.add("  " + mark + text)
+	}
 }
 
 // peopleLine returns "Reviewers: … · Assignees: …" with the requested

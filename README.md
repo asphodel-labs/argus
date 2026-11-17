@@ -156,6 +156,12 @@ The filter keys `a`, `d`, `b`, and `u` apply to every section except My PRs.
 The cursor keys only move the cursor. They do not load a PR.
 The list marks the opened PR with `●`.
 
+The list shows the PRs of a GitHub stack (`gh stack`) together, in stack order.
+The PR closest to the base branch comes first, and `┌`, `├`, and `└` connect the rows of the stack.
+`[2/3]` after the number is the position of the PR in a stack of 3 PRs.
+A PR of the stack that the list does not show leaves a gap in the positions.
+The detail pane lists all PRs of the stack, marks the open PR with `›`, and shows the state of a merged or closed PR.
+
 The fuzzy finder searches the PRs that the list shows after the filters. It also searches the folded groups and sections.
 It matches the title, the number (`812` or `#812`), the repo, and the author.
 `enter` moves the cursor to the PR, unfolds its group and section, and opens the PR. The focus moves to the detail pane.
