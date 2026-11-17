@@ -163,15 +163,15 @@
 - Modify: `internal/tui/app.go`
 - Modify: `internal/tui/keys.go`
 
-- [ ] create the `commandLine` dialog: text input, `tab` completion of names, `enter` to run, `esc` to close, a view on the last line
-- [ ] open it with `:` from the list and the detail pane
-- [ ] add the `GitHub` interface methods `ConvertToDraft`, `MarkReady`, and `ClosePR`, and run `:draft`, `:ready`, and `:close` through `m.action` with a detail refresh
-- [ ] add the state checks from Solution Overview. They read the loaded detail, not `m.detail.sel`. Add "unknown command: <name>" for an unknown name
-- [ ] add `:` "command line" to `KeyMap.Actions`
-- [ ] write tests: each built-in command calls the fake GitHub with the PR id, the state checks, completion, `esc`, an unknown name, no opened PR, and a detail that is not loaded
-- [ ] write a test for `:draft`, a detail refresh to a draft, then `:ready`: `:ready` calls GitHub and does not show "already ready"
-- [ ] write a test for a GitHub error: the status bar shows "<desc> failed: <error>"
-- [ ] run `make test`: it must pass before task 7
+- [x] create the `commandLine` dialog: text input, `tab` completion of names, `enter` to run, `esc` to close, a view on the last line
+- [x] open it with `:` from the list and the detail pane
+- [x] add the `GitHub` interface methods `ConvertToDraft`, `MarkReady`, and `ClosePR`, and run `:draft`, `:ready`, and `:close` through `m.action` with a detail refresh
+- [x] add the state checks from Solution Overview. They read the loaded detail, not `m.detail.sel`. Add "unknown command: <name>" for an unknown name
+- [x] add `:` "command line" to `KeyMap.Actions`
+- [x] write tests: each built-in command calls the fake GitHub with the PR id, the state checks, completion, `esc`, an unknown name, no opened PR, and a detail that is not loaded
+- [x] write a test for `:draft`, a detail refresh to a draft, then `:ready`: `:ready` calls GitHub and does not show "already ready"
+- [x] write a test for a GitHub error: the status bar shows "<desc> failed: <error>"
+- [x] run `make test`: it must pass before task 7
 
 ### Task 7: Connect custom commands to the command line and keys
 

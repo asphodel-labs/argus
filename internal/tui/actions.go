@@ -34,6 +34,9 @@ type GitHub interface {
 	RequestReviews(ctx context.Context, prID string, userIDs, teamIDs, botIDs []string) error
 	AddAssignees(ctx context.Context, assignableID string, ids []string) error
 	RemoveAssignees(ctx context.Context, assignableID string, ids []string) error
+	ConvertToDraft(ctx context.Context, prID string) error
+	MarkReady(ctx context.Context, prID string) error
+	ClosePR(ctx context.Context, prID string) error
 }
 
 // MergeMemory keeps the last merge method for each repository.
@@ -138,6 +141,10 @@ func prRef(pr model.PR) string {
 // key.
 func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	s := msg.String()
+	if s == ":" {
+		m.list.pending, m.detail.pending = "", ""
+		return PushDialog(m.newCommandLine()), true
+	}
 	switch s {
 	case "A", "M", "U", "R", "@", "f", "F", "c", "r", "+", "x", "o", "v", "p", "y":
 	default:

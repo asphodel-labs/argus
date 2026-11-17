@@ -883,3 +883,15 @@ func TestUpdateBranchNotBlockedWhenBehind(t *testing.T) {
 	env.press("esc", "U", "y")
 	wantCalls(t, env.gh.Calls(), "UpdateBranch PR_1 MERGE abc123")
 }
+
+func (f *fakeGitHub) ConvertToDraft(_ context.Context, prID string) error {
+	return f.record("ConvertToDraft", prID)
+}
+
+func (f *fakeGitHub) MarkReady(_ context.Context, prID string) error {
+	return f.record("MarkReady", prID)
+}
+
+func (f *fakeGitHub) ClosePR(_ context.Context, prID string) error {
+	return f.record("ClosePR", prID)
+}

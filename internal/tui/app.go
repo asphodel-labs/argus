@@ -299,6 +299,8 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		m.detail.loaded(msg)
 	case clearMessageMsg:
 		m.status.clearMessage(msg.id)
+	case commandLineMsg:
+		return m.handleCommandLine(msg)
 	case finderPickMsg:
 		return m.handleFinderPick(msg.entry)
 	case finderSearchDoneMsg:
@@ -446,8 +448,14 @@ func waitForUpdate(ch <-chan poller.Update) tea.Cmd {
 // top dialog over the panes.
 func (m *Model) View() tea.View {
 	mainHeight := max(m.height-1, 3)
+	bottom := m.status.Render(m.width, m.styles)
 	var main string
+	if cl, ok := m.topDialog().(*commandLine); ok {
+		// The command line takes the place of the status bar.
+		main, bottom = m.panes(mainHeight), cl.View(m.width)
+	}
 	switch {
+	case main != "":
 	case len(m.dialogs) > 0:
 		main = m.overlay(mainHeight, m.dialogs[len(m.dialogs)-1].View(min(m.width-4, 72)))
 	case m.help:
@@ -455,7 +463,7 @@ func (m *Model) View() tea.View {
 	default:
 		main = m.panes(mainHeight)
 	}
-	v := tea.NewView(main + "\n" + m.status.Render(m.width, m.styles))
+	v := tea.NewView(main + "\n" + bottom)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
