@@ -1,0 +1,13 @@
+{
+  "data": {
+    "repository": {
+      "assignableUsers": {
+        "totalCount": 240,
+        "nodes": [
+          {"id": "U_alice", "login": "alice", "name": "Alice Smith"},
+          {"id": "U_bob", "login": "bob", "name": null}
+        ]
+      }
+    }
+  }
+}

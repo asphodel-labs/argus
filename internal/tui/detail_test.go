@@ -153,6 +153,7 @@ func TestDetailRenderRecordedPR(t *testing.T) {
 		"Add retry to the uploader",
 		"✗ CI failed · acme/api#42 · alice · into main",
 		"Reviews: ✎ bob",
+		"Reviewers: carol, acme/core, copilot · Assignees: alice, dave",
 		"Merge: ✓ mergeable · blocked",
 		"Checks (2)", "✗ test · github-actions", "⏳ lint · github-actions",
 		"Description", "Retry the upload three times.", "No API change.",
@@ -177,6 +178,37 @@ func TestDetailRenderRecordedPR(t *testing.T) {
 	// The conversation is in time order: the bot comment is older.
 	if strings.Index(got, "Bot comment.") > strings.Index(got, "Please add a test.") {
 		t.Errorf("conversation is not in time order:\n%s", got)
+	}
+}
+
+func TestPeopleLine(t *testing.T) {
+	alice := model.Actor{ID: "U_a", Login: "alice"}
+	team := model.Actor{ID: "T_1", Login: "acme/core", Typename: model.TypenameTeam}
+	for _, c := range []struct {
+		name      string
+		reviewers []model.Actor
+		assignees []model.Actor
+		want      string
+	}{
+		{"both", []model.Actor{alice, team}, []model.Actor{alice}, "Reviewers: alice, acme/core · Assignees: alice"},
+		{"reviewers only", []model.Actor{team}, nil, "Reviewers: acme/core"},
+		{"assignees only", nil, []model.Actor{alice}, "Assignees: alice"},
+		{"none", nil, nil, ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := peopleLine(model.PR{RequestedReviewers: c.reviewers, Assignees: c.assignees}); got != c.want {
+				t.Errorf("peopleLine = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestDetailNoPeopleLine(t *testing.T) {
+	m := newDetailModel(t, recordedClient(t, "detail_no_checks.json"), fixedNow, detailSnapshot(fullPR()))
+	press(m, "j", "j", "enter")
+	got := detailText(m)
+	if strings.Contains(got, "Reviewers:") || strings.Contains(got, "Assignees:") {
+		t.Errorf("detail has a people line:\n%s", got)
 	}
 }
 

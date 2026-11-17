@@ -1,0 +1,10 @@
+{
+  "data": {
+    "node": {
+      "suggestedReviewers": [
+        {"reviewer": {"id": "U_carol", "login": "carol", "name": "Carol King"}},
+        {"reviewer": {"id": "U_bob", "login": "bob", "name": null}}
+      ]
+    }
+  }
+}

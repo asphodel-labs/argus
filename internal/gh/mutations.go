@@ -478,3 +478,78 @@ func notFound(name string, err error) error {
 	}
 	return err
 }
+
+// UpdateMethod is a value of the GitHub PullRequestBranchUpdateMethod enum.
+type UpdateMethod string
+
+// Branch update methods. MERGE merges the base branch into the head
+// branch. REBASE rebases the head branch on the base branch.
+const (
+	UpdateMerge  UpdateMethod = "MERGE"
+	UpdateRebase UpdateMethod = "REBASE"
+)
+
+const updateBranchMutation = `mutation UpdateBranch($input: UpdatePullRequestBranchInput!) {
+  updatePullRequestBranch(input: $input) { pullRequest { id headRefOid } }
+}`
+
+// UpdateBranch brings the head branch of the PR up to date with the base
+// branch. GitHub refuses the update if the head is not headSHA. An empty
+// headSHA sends no expectedHeadOid.
+func (c *Client) UpdateBranch(ctx context.Context, prID string, method UpdateMethod, headSHA string) error {
+	input := map[string]any{"pullRequestId": prID, "updateMethod": string(method)}
+	if headSHA != "" {
+		input["expectedHeadOid"] = headSHA
+	}
+	return c.mutate(ctx, "update branch "+prID, updateBranchMutation, input, nil)
+}
+
+const requestReviewsMutation = `mutation RequestReviews($input: RequestReviewsInput!) {
+  requestReviews(input: $input) { pullRequest { id } }
+}`
+
+// RequestReviews replaces the requested reviewers of the PR with the
+// users, the teams, and the bots of the ids. It sends union false, so
+// GitHub removes each requested reviewer that the ids do not include.
+// A caller that keeps a team or a bot must give its id.
+func (c *Client) RequestReviews(ctx context.Context, prID string, userIDs, teamIDs, botIDs []string) error {
+	input := map[string]any{
+		"pullRequestId": prID,
+		"userIds":       idList(userIDs),
+		"teamIds":       idList(teamIDs),
+		"botIds":        idList(botIDs),
+		"union":         false,
+	}
+	return c.mutate(ctx, "request reviews "+prID, requestReviewsMutation, input, nil)
+}
+
+// idList returns ids, or an empty list for nil. GitHub then gets [] and
+// not null.
+func idList(ids []string) []string {
+	if ids == nil {
+		return []string{}
+	}
+	return ids
+}
+
+const addAssigneesMutation = `mutation AddAssignees($input: AddAssigneesToAssignableInput!) {
+  addAssigneesToAssignable(input: $input) { clientMutationId }
+}`
+
+const removeAssigneesMutation = `mutation RemoveAssignees($input: RemoveAssigneesFromAssignableInput!) {
+  removeAssigneesFromAssignable(input: $input) { clientMutationId }
+}`
+
+// AddAssignees assigns the users of ids to the PR or the issue of
+// assignableID. GitHub keeps the other assignees.
+func (c *Client) AddAssignees(ctx context.Context, assignableID string, ids []string) error {
+	input := map[string]any{"assignableId": assignableID, "assigneeIds": idList(ids)}
+	return c.mutate(ctx, "add assignees "+assignableID, addAssigneesMutation, input, nil)
+}
+
+// RemoveAssignees removes the users of ids from the assignees of the PR or
+// the issue of assignableID.
+func (c *Client) RemoveAssignees(ctx context.Context, assignableID string, ids []string) error {
+	input := map[string]any{"assignableId": assignableID, "assigneeIds": idList(ids)}
+	return c.mutate(ctx, "remove assignees "+assignableID, removeAssigneesMutation, input, nil)
+}

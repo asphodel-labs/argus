@@ -7,11 +7,17 @@ import "time"
 const (
 	TypenameUser = "User"
 	TypenameBot  = "Bot"
+	TypenameTeam = "Team"
 )
 
-// Actor is the author of a PR, a review, or a comment.
+// Actor is the author of a PR, a review, or a comment. It is also a
+// requested reviewer, an assignee, or a user that a picker offers.
+// ID and Name are set only for these. The Login of a team is
+// "org/slug".
 type Actor struct {
+	ID       string
 	Login    string
+	Name     string
 	Typename string
 }
 
@@ -118,6 +124,12 @@ type PR struct {
 	MergeStateStatus    MergeStateStatus
 	MergeMethods        []MergeMethod
 	DeleteBranchOnMerge bool
+
+	// RequestedReviewers holds the users, teams, and bots that the PR
+	// requests a review from. Assignees holds the users that the PR is
+	// assigned to. Both come from the detail query.
+	RequestedReviewers []Actor
+	Assignees          []Actor
 }
 
 // Check is one check run or status context on the head commit.

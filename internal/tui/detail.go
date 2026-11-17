@@ -409,6 +409,9 @@ func (b *detailBuilder) build(pr model.PR) {
 	b.add(ss.Render(status.Icon()+" "+status.String()) + st.Muted.Render(fmt.Sprintf(" · %s#%d · %s · into %s",
 		pr.Repo.FullName(), pr.Number, pr.Author.Login, pr.BaseRef)))
 	b.add("Reviews: " + b.reviewsLine(pr))
+	if line := peopleLine(pr); line != "" {
+		b.add(line)
+	}
 	b.add("Merge: " + b.mergeLine(pr))
 	b.add("")
 	b.checks(pr)
@@ -565,6 +568,20 @@ func (b *detailBuilder) reviewsLine(pr model.PR) string {
 		parts = append(parts, text)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// peopleLine returns "Reviewers: … · Assignees: …" with the requested
+// reviewers and the assignees of the PR. It leaves out an empty part, and
+// it returns "" if both parts are empty.
+func peopleLine(pr model.PR) string {
+	var parts []string
+	if len(pr.RequestedReviewers) > 0 {
+		parts = append(parts, "Reviewers: "+actorLogins(pr.RequestedReviewers))
+	}
+	if len(pr.Assignees) > 0 {
+		parts = append(parts, "Assignees: "+actorLogins(pr.Assignees))
+	}
+	return strings.Join(parts, " · ")
 }
 
 func (b *detailBuilder) mergeLine(pr model.PR) string {

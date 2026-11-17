@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/tdragon/argus/internal/gh"
 	"github.com/tdragon/argus/internal/model"
 )
 
@@ -157,7 +158,7 @@ func mergePlan(pr model.PR) (blocked string, auto bool) {
 	case pr.MergeStateStatus == "BLOCKED":
 		return "branch protection blocks the merge: a required review or check is missing", false
 	case pr.MergeStateStatus == "BEHIND":
-		return "the head branch is behind the base branch", false
+		return "the head branch is behind the base branch; press U to update it", false
 	case pr.Mergeable == model.MergeableUnknown || pr.MergeStateStatus == "UNKNOWN" || pr.MergeStateStatus == "":
 		return "GitHub has not computed the merge state yet; refresh and try again", false
 	}
@@ -244,6 +245,92 @@ func (d *mergeDialog) View(width int) string {
 		lines = append(lines, "Sending…")
 	} else {
 		lines = append(lines, "[j/k] method  [y/enter] "+verb+"  [esc] cancel")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// updateMethods are the branch update methods in dialog order.
+var updateMethods = []gh.UpdateMethod{gh.UpdateMerge, gh.UpdateRebase}
+
+// updateLabel returns the words of a branch update method.
+func updateLabel(m gh.UpdateMethod) string {
+	if m == gh.UpdateRebase {
+		return "rebase on the base branch"
+	}
+	return "merge the base branch"
+}
+
+// updateDialog is the dialog of the U key. It shows the update methods, or
+// the reason that blocks the update. It does not check the merge state:
+// GitHub returns an error if the branch is up to date, and the dialog
+// shows it.
+type updateDialog struct {
+	pr      model.PR
+	cursor  int
+	blocked string
+	sending bool
+	err     error
+	// confirm starts the update with method.
+	confirm func(d *updateDialog, method gh.UpdateMethod) tea.Cmd
+}
+
+// newUpdateDialog returns the update dialog for the detail of pr.
+func newUpdateDialog(pr model.PR) *updateDialog {
+	d := &updateDialog{pr: pr}
+	if pr.State == "CLOSED" || pr.State == "MERGED" {
+		d.blocked = "the PR is not open"
+	}
+	return d
+}
+
+func (d *updateDialog) Update(msg tea.KeyPressMsg) (Dialog, tea.Cmd, bool) {
+	if d.sending {
+		return d, nil, msg.String() != "esc" && msg.String() != "ctrl+c"
+	}
+	if d.blocked != "" {
+		return d, nil, false
+	}
+	switch msg.String() {
+	case "j", "down", "tab":
+		d.cursor = min(d.cursor+1, len(updateMethods)-1)
+	case "k", "up", "shift+tab":
+		d.cursor = max(d.cursor-1, 0)
+	case "y", "enter":
+		d.sending, d.err = true, nil
+		return d, d.confirm(d, updateMethods[d.cursor]), true
+	default:
+		return d, nil, false
+	}
+	return d, nil, true
+}
+
+func (d *updateDialog) failed(err error) { d.sending, d.err = false, err }
+
+func (d *updateDialog) Unsent() bool { return false }
+
+func (d *updateDialog) View(width int) string {
+	width = max(width, 10)
+	title := fmt.Sprintf("Update branch %s#%d: %s", d.pr.Repo.FullName(), d.pr.Number, d.pr.Title)
+	lines := []string{ansi.Truncate(title, width, "…"), ""}
+	if d.blocked != "" {
+		lines = append(lines, ansi.Wrap("Blocked: "+d.blocked, width, ""), "", "[esc] close")
+		return strings.Join(lines, "\n")
+	}
+	for i, m := range updateMethods {
+		marker := "  "
+		if i == d.cursor {
+			marker = "› "
+		}
+		lines = append(lines, marker+updateLabel(m))
+	}
+	lines = append(lines, "")
+	if d.err != nil {
+		lines = append(lines, ansi.Wrap("Error: "+firstLine(d.err.Error()), width, ""))
+	}
+	if d.sending {
+		lines = append(lines, "Sending…")
+	} else {
+		lines = append(lines, "[j/k] method  [y/enter] update  [esc] cancel")
 	}
 	return strings.Join(lines, "\n")
 }

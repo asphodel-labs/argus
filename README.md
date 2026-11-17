@@ -170,6 +170,9 @@ With no opened PR, they show "open a PR with enter".
 |---|---|
 | `A` | Approve. |
 | `M` | Merge. The dialog keeps the last merge method for each repo. If branch protection blocks the merge and the checks are pending, the dialog enables auto-merge. |
+| `U` | Update the branch. Merge the base branch into the head branch, or rebase the head branch on the base branch. |
+| `R` | Request a review. Type to filter the users, `space` checks a user, and `enter` sends. The requested teams and bots stay. |
+| `@` | Assign users. The user list works as for `R`. |
 | `f` / `F` | Rerun the failed checks / all checks. |
 | `c` | Comment. |
 | `r` | Reply to a thread. |

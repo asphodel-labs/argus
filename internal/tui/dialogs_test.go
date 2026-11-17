@@ -14,15 +14,24 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
+	"github.com/tdragon/argus/internal/gh"
 	"github.com/tdragon/argus/internal/model"
 	"github.com/tdragon/argus/internal/poller"
 )
 
 // fakeGitHub records each action call and returns the error of its name.
+// AssignableUsers returns users and total for an empty query, and
+// found[query] for other queries. A non-nil gate blocks AssignableUsers
+// until the gate closes.
 type fakeGitHub struct {
-	mu    sync.Mutex
-	calls []string
-	errs  map[string]error
+	mu        sync.Mutex
+	calls     []string
+	errs      map[string]error
+	users     []model.Actor
+	total     int
+	found     map[string][]model.Actor
+	suggested []model.Actor
+	gate      chan struct{}
 }
 
 func (f *fakeGitHub) record(name string, args ...any) error {
@@ -89,6 +98,42 @@ func (f *fakeGitHub) RerunFailedJobs(_ context.Context, repo model.Repo, runID i
 
 func (f *fakeGitHub) RerunWorkflow(_ context.Context, repo model.Repo, runID int64) error {
 	return f.record("RerunWorkflow", repo.FullName(), runID)
+}
+
+func (f *fakeGitHub) UpdateBranch(_ context.Context, prID string, method gh.UpdateMethod, headSHA string) error {
+	return f.record("UpdateBranch", prID, method, headSHA)
+}
+
+func (f *fakeGitHub) AssignableUsers(_ context.Context, owner, repo, query string) ([]model.Actor, int, error) {
+	if f.gate != nil {
+		<-f.gate
+	}
+	err := f.record("AssignableUsers", owner+"/"+repo, query)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if query == "" {
+		return f.users, f.total, err
+	}
+	return f.found[query], len(f.found[query]), err
+}
+
+func (f *fakeGitHub) SuggestedReviewers(_ context.Context, prID string) ([]model.Actor, error) {
+	err := f.record("SuggestedReviewers", prID)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.suggested, err
+}
+
+func (f *fakeGitHub) RequestReviews(_ context.Context, prID string, userIDs, teamIDs, botIDs []string) error {
+	return f.record("RequestReviews", prID, userIDs, teamIDs, botIDs)
+}
+
+func (f *fakeGitHub) AddAssignees(_ context.Context, assignableID string, ids []string) error {
+	return f.record("AddAssignees", assignableID, ids)
+}
+
+func (f *fakeGitHub) RemoveAssignees(_ context.Context, assignableID string, ids []string) error {
+	return f.record("RemoveAssignees", assignableID, ids)
 }
 
 // fakeMemory is an in-memory MergeMemory.
@@ -759,4 +804,82 @@ func TestOpenCommandDefault(t *testing.T) {
 	if got := openCommand(); got != "open" && got != "xdg-open" {
 		t.Fatalf("open command %q", got)
 	}
+}
+
+func TestUpdateBranchDialog(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		keys []string
+		call string
+		desc string
+	}{
+		{"merge", []string{"enter"}, "UpdateBranch PR_1 MERGE abc123", "update branch of acme/api#7: done"},
+		{"rebase", []string{"j", "y"}, "UpdateBranch PR_1 REBASE abc123", "rebase branch of acme/api#7: done"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			env := newActionModel(t, actionPR())
+			env.press("U")
+			text := env.dialogText()
+			for _, want := range []string{"Update branch acme/api#7: Add retry", "› merge the base branch", "rebase on the base branch", "[y/enter] update"} {
+				if !strings.Contains(text, want) {
+					t.Fatalf("dialog has no %q:\n%s", want, text)
+				}
+			}
+			env.press(c.keys...)
+			wantCalls(t, env.gh.Calls(), c.call)
+			if env.m.Dialogs() != 0 {
+				t.Fatal("dialog open after the update")
+			}
+			if msg := env.m.Status().Message(); msg != c.desc {
+				t.Fatalf("message %q, want %q", msg, c.desc)
+			}
+			if env.det.callCount() != 2 {
+				t.Fatalf("detail calls = %d, want a refresh", env.det.callCount())
+			}
+		})
+	}
+}
+
+func TestUpdateBranchErrorKeepsDialog(t *testing.T) {
+	env := newActionModel(t, actionPR())
+	env.gh.setErr("UpdateBranch", errors.New("There are no new commits on the base branch."))
+	env.press("U", "y")
+	if env.m.Dialogs() != 1 || !strings.Contains(env.dialogText(), "Error: There are no new commits") {
+		t.Fatalf("dialog after error:\n%s", env.dialogText())
+	}
+	env.press("esc")
+	if env.m.Dialogs() != 0 {
+		t.Fatal("esc did not close the dialog")
+	}
+}
+
+func TestUpdateBranchBlockedOnClosedPR(t *testing.T) {
+	for _, state := range []string{"CLOSED", "MERGED"} {
+		t.Run(state, func(t *testing.T) {
+			pr := actionPR()
+			pr.State = state
+			env := newActionModel(t, pr)
+			env.press("U")
+			if text := env.dialogText(); !strings.Contains(text, "Blocked: the PR is not open") || !strings.Contains(text, "[esc] close") {
+				t.Fatalf("dialog:\n%s", text)
+			}
+			env.press("y", "enter", "esc")
+			wantCalls(t, env.gh.Calls())
+			if env.m.Dialogs() != 0 {
+				t.Fatal("esc did not close the dialog")
+			}
+		})
+	}
+}
+
+func TestUpdateBranchNotBlockedWhenBehind(t *testing.T) {
+	pr := actionPR()
+	pr.MergeStateStatus = "BEHIND"
+	env := newActionModel(t, pr)
+	env.press("M")
+	if text := env.dialogText(); !strings.Contains(text, "press U to update it") {
+		t.Fatalf("merge dialog:\n%s", text)
+	}
+	env.press("esc", "U", "y")
+	wantCalls(t, env.gh.Calls(), "UpdateBranch PR_1 MERGE abc123")
 }

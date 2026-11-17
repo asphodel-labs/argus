@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/tdragon/argus/internal/execx"
+	"github.com/tdragon/argus/internal/gh"
 	"github.com/tdragon/argus/internal/model"
 )
 
@@ -27,6 +28,12 @@ type GitHub interface {
 	UnresolveThread(ctx context.Context, threadID string) error
 	RerunFailedJobs(ctx context.Context, repo model.Repo, runID int64) error
 	RerunWorkflow(ctx context.Context, repo model.Repo, runID int64) error
+	UpdateBranch(ctx context.Context, prID string, method gh.UpdateMethod, headSHA string) error
+	AssignableUsers(ctx context.Context, owner, repo, query string) ([]model.Actor, int, error)
+	SuggestedReviewers(ctx context.Context, prID string) ([]model.Actor, error)
+	RequestReviews(ctx context.Context, prID string, userIDs, teamIDs, botIDs []string) error
+	AddAssignees(ctx context.Context, assignableID string, ids []string) error
+	RemoveAssignees(ctx context.Context, assignableID string, ids []string) error
 }
 
 // MergeMemory keeps the last merge method for each repository.
@@ -132,7 +139,7 @@ func prRef(pr model.PR) string {
 func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	s := msg.String()
 	switch s {
-	case "A", "M", "f", "F", "c", "r", "+", "x", "o", "v", "p":
+	case "A", "M", "U", "R", "@", "f", "F", "c", "r", "+", "x", "o", "v", "p":
 	default:
 		return nil, false
 	}
@@ -172,6 +179,12 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	switch s {
 	case "M":
 		return m.merge(detail.pr), true
+	case "U":
+		return m.updateBranch(detail.pr), true
+	case "R":
+		return m.requestReview(detail.pr), true
+	case "@":
+		return m.assign(detail.pr), true
 	case "f", "F":
 		return m.rerun(detail.pr, s == "f"), true
 	default:
@@ -237,6 +250,24 @@ func (m *Model) merge(pr model.PR) tea.Cmd {
 				}
 			}
 			return "", nil
+		})
+	}
+	return PushDialog(d)
+}
+
+// updateBranch opens the update dialog for the detail of the PR. The
+// update sends the head SHA of the detail as expectedHeadOid, so GitHub
+// refuses the update if the head moved after the detail loaded.
+func (m *Model) updateBranch(pr model.PR) tea.Cmd {
+	client, ref := m.github, prRef(pr)
+	d := newUpdateDialog(pr)
+	d.confirm = func(d *updateDialog, method gh.UpdateMethod) tea.Cmd {
+		desc := "update branch of " + ref
+		if method == gh.UpdateRebase {
+			desc = "rebase branch of " + ref
+		}
+		return m.action(d, pr.ID, desc, true, func(ctx context.Context) (string, error) {
+			return "", client.UpdateBranch(ctx, pr.ID, method, pr.HeadSHA)
 		})
 	}
 	return PushDialog(d)

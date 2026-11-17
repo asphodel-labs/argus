@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,6 +109,25 @@ func TestPRDetailFull(t *testing.T) {
 		t.Errorf("comments = %d %+v, want %+v", pr.CommentCount, pr.Comments, wantComments)
 	}
 
+	wantReviewers := []model.Actor{
+		{ID: "U_carol", Login: "carol", Name: "Carol King", Typename: "User"},
+		{ID: "T_core", Login: "acme/core", Name: "Core", Typename: "Team"},
+		{ID: "BOT_copilot", Login: "copilot", Typename: "Bot"},
+	}
+	if !reflect.DeepEqual(pr.RequestedReviewers, wantReviewers) {
+		t.Errorf("requested reviewers = %+v, want %+v", pr.RequestedReviewers, wantReviewers)
+	}
+	wantAssignees := []model.Actor{
+		{ID: "U_alice", Login: "alice", Name: "Alice Smith", Typename: "User"},
+		{ID: "U_dave", Login: "dave", Typename: "User"},
+	}
+	if !reflect.DeepEqual(pr.Assignees, wantAssignees) {
+		t.Errorf("assignees = %+v, want %+v", pr.Assignees, wantAssignees)
+	}
+	if q := ft.requests()[0].Query; !strings.Contains(q, "reviewRequests(first: 50)") || !strings.Contains(q, "assignees(first: 50)") {
+		t.Errorf("query has no reviewRequests or assignees: %q", q)
+	}
+
 	if got := model.DeriveStatus(pr, "me"); got != model.StatusCIFailed {
 		t.Errorf("DeriveStatus = %v, want CI failed", got)
 	}
@@ -131,6 +151,9 @@ func TestPRDetailNoChecks(t *testing.T) {
 	}
 	if pr.Reviews != nil || pr.Threads != nil || pr.Comments != nil || pr.Body != "" {
 		t.Errorf("want no reviews, threads, comments, body; got %+v", pr)
+	}
+	if pr.RequestedReviewers != nil || pr.Assignees != nil {
+		t.Errorf("reviewers, assignees = %+v %+v, want none", pr.RequestedReviewers, pr.Assignees)
 	}
 }
 
