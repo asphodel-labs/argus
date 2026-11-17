@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 func TestOpenMissingFile(t *testing.T) {

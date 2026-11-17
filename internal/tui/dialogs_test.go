@@ -14,9 +14,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
-	"github.com/tdragon/argus/internal/gh"
-	"github.com/tdragon/argus/internal/model"
-	"github.com/tdragon/argus/internal/poller"
+	"github.com/asphodel-labs/argus/internal/gh"
+	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/poller"
 )
 
 // fakeGitHub records each action call and returns the error of its name.

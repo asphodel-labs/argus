@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tdragon/argus/internal/gh"
+	"github.com/asphodel-labs/argus/internal/gh"
 )
 
 var update = flag.Bool("update", false, "write the golden files")

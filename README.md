@@ -30,18 +30,24 @@ argus finds agterm through the `AGTERM_SESSION_ID` environment variable.
 
 ## Install
 
-Download a binary for macOS or Linux from the [releases page](https://github.com/tdragon/argus/releases).
+Install argus with Homebrew:
+
+```fish
+brew install asphodel-labs/tap/argus
+```
+
+Download a binary for macOS or Linux from the [releases page](https://github.com/asphodel-labs/argus/releases).
 
 You can also install argus with Go:
 
 ```fish
-go install github.com/tdragon/argus/cmd/argus@latest
+go install github.com/asphodel-labs/argus/cmd/argus@latest
 ```
 
 Or clone the repository and build the binary:
 
 ```fish
-git clone https://github.com/tdragon/argus.git
+git clone https://github.com/asphodel-labs/argus.git
 cd argus
 make build
 ```
@@ -301,7 +307,11 @@ git tag v0.1.0 origin/main
 git push origin v0.1.0
 ```
 
-The release workflow builds the binaries with GoReleaser and creates a draft release. Check the draft on GitHub, then publish it.
+The release workflow builds the binaries with GoReleaser and publishes the release.
+The tag publishes the release at once, so push a tag only for a commit that you want to ship.
+GoReleaser also writes the Homebrew cask to [asphodel-labs/homebrew-tap](https://github.com/asphodel-labs/homebrew-tap).
+It pushes the cask over SSH with a deploy key that has write access to the tap repository.
+The private key is the secret `HOMEBREW_TAP_SSH_KEY` in the `release` environment of this repository.
 
 ## Disclaimer
 

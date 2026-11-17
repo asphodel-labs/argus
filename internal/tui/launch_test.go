@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/tdragon/argus/internal/launch"
-	"github.com/tdragon/argus/internal/model"
-	"github.com/tdragon/argus/internal/review"
+	"github.com/asphodel-labs/argus/internal/launch"
+	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/review"
 )
 
 // fakeLauncher records the PR of each launch.

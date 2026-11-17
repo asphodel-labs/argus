@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tdragon/argus/internal/execx"
-	"github.com/tdragon/argus/internal/gh"
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/execx"
+	"github.com/asphodel-labs/argus/internal/gh"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 // Exit codes of revdiff with --exit-code-on-annotations. agtermctl with

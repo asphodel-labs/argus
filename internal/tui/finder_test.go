@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 // finderIDs returns the PR IDs of the finder matches in order.

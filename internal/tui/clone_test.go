@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
-	"github.com/tdragon/argus/internal/review"
+	"github.com/asphodel-labs/argus/internal/review"
 )
 
 func (r *fakeRunner) Calls() [][]string {

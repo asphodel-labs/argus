@@ -12,15 +12,15 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/cli/go-gh/v2/pkg/api"
 
-	"github.com/tdragon/argus/internal/config"
-	"github.com/tdragon/argus/internal/execx"
-	"github.com/tdragon/argus/internal/gh"
-	"github.com/tdragon/argus/internal/launch"
-	"github.com/tdragon/argus/internal/notify"
-	"github.com/tdragon/argus/internal/poller"
-	"github.com/tdragon/argus/internal/review"
-	"github.com/tdragon/argus/internal/state"
-	"github.com/tdragon/argus/internal/tui"
+	"github.com/asphodel-labs/argus/internal/config"
+	"github.com/asphodel-labs/argus/internal/execx"
+	"github.com/asphodel-labs/argus/internal/gh"
+	"github.com/asphodel-labs/argus/internal/launch"
+	"github.com/asphodel-labs/argus/internal/notify"
+	"github.com/asphodel-labs/argus/internal/poller"
+	"github.com/asphodel-labs/argus/internal/review"
+	"github.com/asphodel-labs/argus/internal/state"
+	"github.com/asphodel-labs/argus/internal/tui"
 )
 
 // version is the release version. The release build sets it with

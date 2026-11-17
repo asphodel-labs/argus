@@ -11,7 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 // fakeSearcher records each search query and returns the set PRs or error.

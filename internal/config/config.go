@@ -13,7 +13,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/tdragon/argus/internal/execx"
+	"github.com/asphodel-labs/argus/internal/execx"
 )
 
 // Default values for optional settings.

@@ -24,4 +24,25 @@ changelog:
   sort: asc
 
 release:
-  draft: true
+  draft: false
+
+homebrew_casks:
+  - name: argus
+    description: Terminal UI for the GitHub pull requests that concern you.
+    homepage: https://github.com/asphodel-labs/argus
+    binaries: [argus]
+    repository:
+      owner: asphodel-labs
+      name: homebrew-tap
+      git:
+        url: git@github.com:asphodel-labs/homebrew-tap.git
+        private_key: "{{ .Env.HOMEBREW_TAP_SSH_KEY }}"
+    commit_msg_template: "argus {{ .Tag }}"
+    hooks:
+      post:
+        # The binary is not signed. Remove the quarantine attribute so that
+        # macOS starts it.
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/argus"]
+          end

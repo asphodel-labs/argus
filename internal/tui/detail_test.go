@@ -17,9 +17,9 @@ import (
 	"github.com/charmbracelet/x/exp/teatest/v2"
 	"github.com/cli/go-gh/v2/pkg/api"
 
-	"github.com/tdragon/argus/internal/gh"
-	"github.com/tdragon/argus/internal/model"
-	"github.com/tdragon/argus/internal/poller"
+	"github.com/asphodel-labs/argus/internal/gh"
+	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/poller"
 )
 
 // fakeDetailer returns the PR or the error for each PR id and counts the

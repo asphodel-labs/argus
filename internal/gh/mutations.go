@@ -7,7 +7,7 @@ import (
 
 	"github.com/cli/go-gh/v2/pkg/api"
 
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 // ReviewEvent is an event from the GitHub PullRequestReviewEvent enum.

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tdragon/argus/internal/gh"
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/gh"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 // fakeReviewAPI records each call and returns the error of its step. It

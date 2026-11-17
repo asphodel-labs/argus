@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tdragon/argus/internal/execx"
-	"github.com/tdragon/argus/internal/model"
-	"github.com/tdragon/argus/internal/review"
+	"github.com/asphodel-labs/argus/internal/execx"
+	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/review"
 )
 
 // Workspace is the agterm workspace that holds the Claude sessions.

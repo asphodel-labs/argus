@@ -13,7 +13,7 @@ import (
 
 	"github.com/cli/go-gh/v2/pkg/api"
 
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 // RerunFailedJobs reruns the failed jobs of a GitHub Actions workflow run.

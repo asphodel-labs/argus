@@ -12,10 +12,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
-	"github.com/tdragon/argus/internal/gh"
-	"github.com/tdragon/argus/internal/model"
-	"github.com/tdragon/argus/internal/poller"
-	"github.com/tdragon/argus/internal/review"
+	"github.com/asphodel-labs/argus/internal/gh"
+	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/poller"
+	"github.com/asphodel-labs/argus/internal/review"
 )
 
 // fakeReviewer records each call. Open waits on block if it is set.

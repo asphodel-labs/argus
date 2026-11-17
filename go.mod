@@ -1,4 +1,4 @@
-module github.com/tdragon/argus
+module github.com/asphodel-labs/argus
 
 go 1.27.3
 

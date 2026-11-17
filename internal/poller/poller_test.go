@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tdragon/argus/internal/gh"
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/gh"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 var t0 = time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)

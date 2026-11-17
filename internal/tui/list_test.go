@@ -11,8 +11,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
-	"github.com/tdragon/argus/internal/model"
-	"github.com/tdragon/argus/internal/poller"
+	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/poller"
 )
 
 var listNow = time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)

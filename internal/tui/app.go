@@ -9,9 +9,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/tdragon/argus/internal/execx"
-	"github.com/tdragon/argus/internal/model"
-	"github.com/tdragon/argus/internal/poller"
+	"github.com/asphodel-labs/argus/internal/execx"
+	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/poller"
 )
 
 // Focus is the pane that gets the pane keys.

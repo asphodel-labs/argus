@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/tdragon/argus/internal/review"
+	"github.com/asphodel-labs/argus/internal/review"
 )
 
 // Cloner clones a repository that has no local clone. review.Worktrees

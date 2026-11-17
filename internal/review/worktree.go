@@ -14,9 +14,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tdragon/argus/internal/execx"
-	"github.com/tdragon/argus/internal/gh"
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/execx"
+	"github.com/asphodel-labs/argus/internal/gh"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 // worktreesDir is the directory inside a clone that holds the PR worktrees.

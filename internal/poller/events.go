@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 // EventKind is the kind of a notification event.

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tdragon/argus/internal/model"
-	"github.com/tdragon/argus/internal/poller"
+	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/poller"
 )
 
 // fakeRunner records the commands. No test calls the real agtermctl.

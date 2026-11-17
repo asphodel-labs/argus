@@ -1,6 +1,6 @@
 # argus
 
-argus is a Go terminal UI for GitHub pull requests. The module path is `github.com/tdragon/argus`.
+argus is a Go terminal UI for GitHub pull requests. The module path is `github.com/asphodel-labs/argus`.
 See `README.md` for the features and `docs/plans/` for the design.
 
 ## Commands

@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tdragon/argus/internal/gh"
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/gh"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 // Search queries of the scopes that gh does not define.

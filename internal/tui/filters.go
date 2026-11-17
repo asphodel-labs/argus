@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 // BotFilter selects the PRs of bots in the list.

@@ -6,9 +6,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/tdragon/argus/internal/launch"
-	"github.com/tdragon/argus/internal/model"
-	"github.com/tdragon/argus/internal/review"
+	"github.com/asphodel-labs/argus/internal/launch"
+	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/review"
 )
 
 // Launcher sets up the PR worktree and starts a Claude session with

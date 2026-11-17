@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tdragon/argus/internal/gh"
+	"github.com/asphodel-labs/argus/internal/gh"
 )
 
 // Record headers of the revdiff annotation output:

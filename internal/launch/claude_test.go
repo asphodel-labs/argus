@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tdragon/argus/internal/model"
-	"github.com/tdragon/argus/internal/review"
+	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/review"
 )
 
 // reply is the result of one fake command.

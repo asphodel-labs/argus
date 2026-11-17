@@ -3,7 +3,7 @@ package poller
 import (
 	"testing"
 
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 func mine(rollup model.CheckState, comments, reviews, threads int, newest string) PRState {

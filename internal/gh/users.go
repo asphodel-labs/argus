@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tdragon/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/model"
 )
 
 // assignableUsersPage is the number of assignable users that one query
