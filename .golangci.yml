@@ -1,0 +1,16 @@
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      # argus calls these only to clean up: a deferred close of a file that
+      # it reads, or the removal of a temporary file after an error.
+      exclude-functions:
+        - (*os.File).Close
+        - (io.ReadCloser).Close
+        - os.Remove
+        - os.RemoveAll
+    staticcheck:
+      # The golangci-lint defaults, plus QF1001: the code keeps a negated
+      # group when it reads more clearly than the De Morgan form.
+      checks: ["all", "-ST1000", "-ST1003", "-ST1016", "-ST1020", "-ST1021", "-ST1022", "-QF1001"]

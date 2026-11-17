@@ -158,10 +158,10 @@ func TestLookupFilter(t *testing.T) {
 		return out
 	}
 	for query, want := range map[string][]string{
-		"6505":                   {"A", "C"},
-		"backend#6505":           {"A"},
-		"globex/BACKEND#6505": {"A"},
-		"other/backend#6505":     nil,
+		"6505":                {"A", "C"},
+		"backend#6505":        {"A"},
+		"GLOBEX/backend#6505": {"A"},
+		"other/backend#6505":  nil,
 	} {
 		lk, _ := parseLookup(query)
 		if got := ids(lk.filter(prs)); !slices.Equal(got, want) {

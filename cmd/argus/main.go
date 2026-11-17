@@ -23,6 +23,10 @@ import (
 	"github.com/tdragon/argus/internal/tui"
 )
 
+// version is the release version. The release build sets it with
+// -ldflags "-X main.version=<tag>".
+var version = "dev"
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "argus:", err)
@@ -36,7 +40,12 @@ func run() error {
 		return err
 	}
 	configPath := flag.String("config", defaultPath, "path to the config file")
+	showVersion := flag.Bool("version", false, "show the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("argus", version)
+		return nil
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {

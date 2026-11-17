@@ -27,20 +27,23 @@ argus finds agterm through the `AGTERM_SESSION_ID` environment variable.
 
 ## Install
 
-Clone the repository and build the binary:
+Download a binary for macOS or Linux from the [releases page](https://github.com/tdragon/argus/releases).
+
+You can also install argus with Go:
 
 ```fish
-git clone git@personalgit:tdragon/argus.git
+go install github.com/tdragon/argus/cmd/argus@latest
+```
+
+Or clone the repository and build the binary:
+
+```fish
+git clone https://github.com/tdragon/argus.git
 cd argus
 make build
 ```
 
 `make build` writes the binary to `bin/argus`. Copy it to a directory in your `PATH`.
-You can also install it with Go from the clone:
-
-```fish
-go install ./cmd/argus
-```
 
 Start argus:
 
@@ -50,6 +53,7 @@ argus -config ~/other/config.toml
 ```
 
 The `-config` flag sets the config file. The default is `~/.config/argus/config.toml`.
+`argus -version` shows the version.
 
 ## Config
 
@@ -271,3 +275,24 @@ These checks need real GitHub and agterm. Nobody did them yet.
 ## Development
 
 See [CLAUDE.md](CLAUDE.md) for the build, test, and lint commands.
+
+The CI workflow runs the lint, the tests, and the build on each pull request and on each push to `main`.
+
+To make a release, push a version tag on a commit of `main`:
+
+```fish
+git tag v0.1.0 origin/main
+git push origin v0.1.0
+```
+
+The release workflow builds the binaries with GoReleaser and creates a draft release. Check the draft on GitHub, then publish it.
+
+## Disclaimer
+
+argus is provided "as is", without warranty of any kind. See the [LICENSE](LICENSE) for the full terms.
+
+argus acts on GitHub with your `gh` login. Approve, merge, update branch, review requests, and the posted reviews change real pull requests. argus asks before it merges or submits a review, but you are responsible for each action that you confirm. argus is not affiliated with GitHub.
+
+## License
+
+argus is released under the [MIT License](LICENSE).
