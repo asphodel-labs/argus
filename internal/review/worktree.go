@@ -36,6 +36,9 @@ type Worktrees struct {
 	// Owners maps an owner to a root directory: <dir>/<repo>. It overrides
 	// RepoRoot.
 	Owners map[string]string
+	// HTTPS true clones with `gh repo clone`, which uses the gh git
+	// protocol. HTTPS false clones with git over SSH.
+	HTTPS bool
 }
 
 // MissingClone is the error of a repository that has no local clone. The
@@ -115,9 +118,14 @@ func (w *Worktrees) FindClone(repo model.Repo) (string, error) {
 	return dir, nil
 }
 
-// Clone runs `gh repo clone` for the missing clone.
+// Clone clones the missing repository. It runs `git clone` with the SSH
+// URL, or `gh repo clone` if HTTPS is true.
 func (w *Worktrees) Clone(ctx context.Context, c *MissingClone) error {
-	_, err := w.run(ctx, "gh", "repo", "clone", c.Repo, c.Dir)
+	if w.HTTPS {
+		_, err := w.run(ctx, "gh", "repo", "clone", c.Repo, c.Dir)
+		return err
+	}
+	_, err := w.run(ctx, "git", "clone", "git@github.com:"+c.Repo+".git", c.Dir)
 	return err
 }
 

@@ -75,7 +75,7 @@ func run() error {
 		defer close(done)
 		_ = p.Run(ctx) // Run returns only the context error.
 	}()
-	worktrees := &review.Worktrees{Runner: execx.Exec{}, RepoRoot: cfg.RepoRoot, Repos: cfg.Repos, Owners: cfg.Owners}
+	worktrees := &review.Worktrees{Runner: execx.Exec{}, RepoRoot: cfg.RepoRoot, Repos: cfg.Repos, Owners: cfg.Owners, HTTPS: cfg.CloneProtocol == config.CloneHTTPS}
 	cleaned := make(chan struct{})
 	go func() {
 		defer close(cleaned)

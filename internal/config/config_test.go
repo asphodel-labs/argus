@@ -37,6 +37,9 @@ func TestLoadMissingFileGivesDefaults(t *testing.T) {
 	if want := filepath.Join(home, "sources"); cfg.RepoRoot != want {
 		t.Errorf("RepoRoot = %q, want %q", cfg.RepoRoot, want)
 	}
+	if cfg.CloneProtocol != CloneSSH {
+		t.Errorf("CloneProtocol = %q, want %q", cfg.CloneProtocol, CloneSSH)
+	}
 	if cfg.User != "" || len(cfg.Orgs) != 0 || len(cfg.BotLogins) != 0 {
 		t.Errorf("unexpected values: %+v", cfg)
 	}
@@ -65,6 +68,7 @@ user = "octocat"
 refresh_interval = "5m30s"
 min_refresh_gap = "2m"
 repo_root = "~/work"
+clone_protocol = "https"
 bot_logins = ["renovate-bot"]
 
 [repos]
@@ -89,6 +93,7 @@ failed = "#ff0000"
 		RefreshInterval: 5*time.Minute + 30*time.Second,
 		MinRefreshGap:   2 * time.Minute,
 		RepoRoot:        filepath.Join(home, "work"),
+		CloneProtocol:   CloneHTTPS,
 		BotLogins:       []string{"renovate-bot"},
 		Repos: map[string]string{
 			"acme/api": filepath.Join(home, "work", "api"),
@@ -115,6 +120,7 @@ func TestLoadErrors(t *testing.T) {
 		{"bad gap", `min_refresh_gap = "soon"`, "parse min_refresh_gap"},
 		{"negative gap", `min_refresh_gap = "-5m"`, "min_refresh_gap \"-5m\" must be positive"},
 		{"zero gap", `min_refresh_gap = "0s"`, "must be positive"},
+		{"bad clone protocol", `clone_protocol = "git"`, `clone_protocol "git" must be "ssh" or "https"`},
 		{"bad toml", `orgs = [`, "parse config"},
 		{"wrong type", `orgs = "acme"`, "parse config"},
 	}

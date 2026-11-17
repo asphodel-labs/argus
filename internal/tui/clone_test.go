@@ -40,7 +40,7 @@ func TestClonePromptConfirm(t *testing.T) {
 	m := finalModel(t, tm)
 
 	got := r.Calls()
-	want := [][]string{{"gh", "repo", "clone", "acme/api", "/src/acme/api"}}
+	want := [][]string{{"git", "clone", "git@github.com:acme/api.git", "/src/acme/api"}}
 	if !slices.EqualFunc(got, want, slices.Equal) {
 		t.Fatalf("calls = %q, want %q", got, want)
 	}
@@ -90,7 +90,7 @@ func TestClonePromptError(t *testing.T) {
 	drive(env.m, cmd)
 	env.press("enter")
 	got := env.dialogText()
-	if !strings.Contains(got, "Error: gh repo clone acme/api /src/acme/api exited with code 1") || !strings.Contains(got, "repository not found") {
+	if !strings.Contains(got, "Error: git clone git@github.com:acme/api.git /src/acme/api") || !strings.Contains(got, "code 1") || !strings.Contains(got, "repository not found") {
 		t.Fatalf("dialog does not show the error:\n%s", got)
 	}
 	if !strings.Contains(got, "[y/enter] clone") {
