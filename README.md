@@ -5,6 +5,9 @@
 argus is a terminal UI for GitHub pull requests.
 It shows the open PRs that concern you and lets you act on them with vim-style keys.
 
+The name comes from Argus Panoptes, the giant with a hundred eyes in Greek mythology.
+Hera made him a guardian because some of his eyes were always open. Like him, argus watches all your PRs, and no review escapes it.
+
 - The left pane lists the PRs in four sections: Needs my review, My PRs, one section for each configured org, and Personal.
 - The detail pane shows one PR: the title, the status, the CI checks, the description, and the conversation threads.
 - The actions are approve, merge, rerun checks, comment, reply, react, and resolve a thread.
