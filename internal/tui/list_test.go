@@ -35,7 +35,7 @@ func testPR(id, repo string, n int, title, author string, opts ...prOpt) model.P
 	p := model.PR{
 		ID: id, Repo: model.Repo{Owner: owner, Name: name}, Number: n, Title: title,
 		Author:    model.Actor{Login: author, Typename: model.TypenameUser},
-		CreatedAt: listNow.Add(-3 * time.Hour),
+		CreatedAt: listNow.Add(-72 * time.Hour),
 	}
 	for _, o := range opts {
 		o(&p)
@@ -175,7 +175,8 @@ func TestListSectionsAndGroups(t *testing.T) {
 			t.Errorf("row %d = %q, want prefix %q", i, got[i], want[i])
 		}
 	}
-	if !strings.HasSuffix(got[4], "alice 3h") {
+	// The age is the time since the last update, not since the creation.
+	if !strings.HasSuffix(got[4], "alice 30m") {
 		t.Errorf("PR row %q has no author and age", got[4])
 	}
 	// PR rows do not show the repository.
@@ -547,5 +548,32 @@ func TestAge(t *testing.T) {
 		if got := age(d); got != want {
 			t.Errorf("age(%v) = %q, want %q", d, got, want)
 		}
+	}
+}
+
+// TestListEmptyScopes checks a snapshot with no orgs and no PRs: the list
+// shows the empty sections, and the keys do not fail.
+func TestListEmptyScopes(t *testing.T) {
+	m := New(Options{Poller: newFakePoller(), Styles: testStyles(t), Me: "me", Now: fixedNow})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m.Update(pollerMsg{Snapshot: &poller.Snapshot{RefreshedAt: listNow, Sections: []poller.Section{
+		{Scope: scopeReview}, {Scope: scopeMine}, {Scope: scopePersonal},
+	}}})
+	want := []string{"Needs my review (0)", "My PRs (0)", "Personal (0)"}
+	got := rowText(m)
+	if len(got) != len(want) {
+		t.Fatalf("rows:\n%s", strings.Join(got, "\n"))
+	}
+	for i := range want {
+		if !strings.Contains(got[i], want[i]) {
+			t.Errorf("row %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+	sendKeys(m, "j", "G", "k", "g", "g", "z", "a", "enter", "m", "/", "esc")
+	if _, ok := m.Selected(); ok {
+		t.Fatal("a PR is selected in an empty list")
+	}
+	if !strings.Contains(m.View().Content, "My PRs") {
+		t.Fatalf("view:\n%s", m.View().Content)
 	}
 }

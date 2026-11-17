@@ -67,7 +67,7 @@ func (m *Model) handleRevdiffDone(msg revdiffDoneMsg) tea.Cmd {
 	case msg.err != nil:
 		return m.status.SetMessage("revdiff " + ref + " failed: " + firstLine(msg.err.Error()))
 	case !msg.result.Annotated:
-		return m.status.SetMessage("revdiff " + ref + ": no annotations")
+		return m.status.SetMessage(withWarning("revdiff "+ref+": no annotations", msg.session.Worktree))
 	}
 	d := newReviewDialog(msg.session, msg.result, strings.EqualFold(msg.pr.Author.Login, m.detail.me))
 	id := msg.pr.ID
@@ -84,6 +84,9 @@ func (m *Model) handleRevdiffDone(msg revdiffDoneMsg) tea.Cmd {
 		})
 	}
 	m.dialogs = append(m.dialogs, d)
+	if msg.session.Worktree.ExcludeErr != nil {
+		return m.status.SetMessage(withWarning("revdiff "+ref+": review dialog open", msg.session.Worktree))
+	}
 	return nil
 }
 

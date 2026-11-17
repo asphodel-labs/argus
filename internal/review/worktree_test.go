@@ -163,11 +163,16 @@ func setupEnv(t *testing.T) (w *Worktrees, r *fakeRunner, clone, wtDir string) {
 	root := t.TempDir()
 	clone = makeClone(t, filepath.Join(root, "acme", "api"))
 	r = &fakeRunner{}
+	r.set(excludeCall(clone), reply{stdout: ".git/info/exclude\n"})
 	return &Worktrees{Runner: r, RepoRoot: root}, r, clone, filepath.Join(clone, ".worktrees", "argus-pr-7")
 }
 
 func fetchCall(clone string) string {
 	return "git -C " + clone + " fetch origin refs/pull/7/head +refs/heads/main:refs/remotes/origin/main"
+}
+
+func excludeCall(clone string) string {
+	return "git -C " + clone + " rev-parse --git-path info/exclude"
 }
 
 func TestSetupNewWorktree(t *testing.T) {
@@ -181,8 +186,119 @@ func TestSetupNewWorktree(t *testing.T) {
 	}
 	wantCalls(t, r.calls,
 		fetchCall(clone),
+		excludeCall(clone),
 		"git -C "+clone+" worktree add --detach "+wtDir+" abc123",
 	)
+	got, err := os.ReadFile(filepath.Join(clone, ".git", "info", "exclude"))
+	if err != nil || string(got) != ".worktrees/\n" {
+		t.Fatalf("exclude file = %q, %v", got, err)
+	}
+}
+
+// TestSetupExcludeErrorDoesNotStop makes .git/info a file, so that the
+// exclude file cannot be written. Setup reports the error in the worktree
+// and adds the worktree.
+func TestSetupExcludeErrorDoesNotStop(t *testing.T) {
+	w, r, clone, wtDir := setupEnv(t)
+	if err := os.WriteFile(filepath.Join(clone, ".git", "info"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wt, err := w.Setup(context.Background(), reviewPR())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wt.Dir != wtDir || wt.ExcludeErr == nil || !strings.Contains(wt.ExcludeErr.Error(), "add .worktrees/ to info/exclude") {
+		t.Fatalf("worktree = %+v, want an exclude error", wt)
+	}
+	wantCalls(t, r.calls,
+		fetchCall(clone),
+		excludeCall(clone),
+		"git -C "+clone+" worktree add --detach "+wtDir+" abc123",
+	)
+
+	// A failed git rev-parse is also only a warning.
+	w, r, clone, wtDir = setupEnv(t)
+	r.set(excludeCall(clone), reply{code: 128, stderr: "fatal: not a git repository"})
+	wt, err = w.Setup(context.Background(), reviewPR())
+	if err != nil || wt.ExcludeErr == nil || !strings.Contains(wt.ExcludeErr.Error(), "not a git repository") {
+		t.Fatalf("Setup = %+v, %v", wt, err)
+	}
+	if last := r.calls[len(r.calls)-1]; last != "git -C "+clone+" worktree add --detach "+wtDir+" abc123" {
+		t.Fatalf("last call = %q, want worktree add", last)
+	}
+}
+
+// TestExcludeWorktreesRealGit runs excludeWorktrees against real git in a
+// temporary repository.
+func TestExcludeWorktreesRealGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	tests := []struct {
+		name string
+		// old is the file content before the call. nil means no file and
+		// no info directory.
+		old  []byte
+		want string
+	}{
+		{"file missing", nil, ".worktrees/\n"},
+		{"empty file", []byte{}, ".worktrees/\n"},
+		{"file without the line", []byte("# comment\n*.log\n"), "# comment\n*.log\n.worktrees/\n"},
+		{"no final newline", []byte("*.log"), "*.log\n.worktrees/\n"},
+		{"line present", []byte("*.log\n.worktrees/\n*.tmp\n"), "*.log\n.worktrees/\n*.tmp\n"},
+		{"rooted line present", []byte("/.worktrees/\n"), "/.worktrees/\n"},
+		{"similar line only", []byte(".worktrees\n.worktrees/x\n"), ".worktrees\n.worktrees/x\n.worktrees/\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clone := mkdir(t, filepath.Join(t.TempDir(), "api"))
+			gitRun(t, clone, "init", "-q", "-b", "main")
+			info := filepath.Join(clone, ".git", "info")
+			if err := os.RemoveAll(info); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(info, "exclude")
+			if tt.old != nil {
+				mkdir(t, info)
+				if err := os.WriteFile(path, tt.old, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			w := &Worktrees{Runner: gitExec{t}}
+			if err := w.excludeWorktrees(context.Background(), clone); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(path)
+			if err != nil || string(got) != tt.want {
+				t.Fatalf("exclude file = %q, %v; want %q", got, err, tt.want)
+			}
+		})
+	}
+}
+
+// TestExcludeWorktreesLinkedClone runs excludeWorktrees in a clone whose
+// .git is a file. git keeps the exclude file in the common git directory.
+func TestExcludeWorktreesLinkedClone(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	tmp := t.TempDir()
+	main := mkdir(t, filepath.Join(tmp, "main"))
+	gitRun(t, main, "init", "-q", "-b", "main")
+	gitRun(t, main, "commit", "-q", "--allow-empty", "-m", "base")
+	linked := filepath.Join(tmp, "linked")
+	gitRun(t, main, "worktree", "add", "-q", "--detach", linked)
+	if info, err := os.Stat(filepath.Join(linked, ".git")); err != nil || info.IsDir() {
+		t.Fatalf("linked .git = %v, %v; want a file", info, err)
+	}
+	w := &Worktrees{Runner: gitExec{t}}
+	if err := w.excludeWorktrees(context.Background(), linked); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(main, ".git", "info", "exclude"))
+	if err != nil || !strings.HasSuffix(string(got), ".worktrees/\n") {
+		t.Fatalf("exclude file = %q, %v", got, err)
+	}
 }
 
 func TestSetupCleanExisting(t *testing.T) {
@@ -482,6 +598,13 @@ func TestWorktreeRealGit(t *testing.T) {
 	}
 	if got := gitRun(t, wt.Dir, "rev-parse", "HEAD"); got != head1 {
 		t.Fatalf("worktree HEAD = %s, want %s", got, head1)
+	}
+	if wt.ExcludeErr != nil {
+		t.Fatalf("exclude error: %v", wt.ExcludeErr)
+	}
+	// The info/exclude line hides the worktrees from git status in the clone.
+	if got := gitRun(t, clone, "status", "--porcelain", "--untracked-files=all"); got != "" {
+		t.Fatalf("clone status = %q, want clean", got)
 	}
 	mb, err := w.MergeBase(ctx, wt.Dir, "main", head1)
 	if err != nil || mb != base {

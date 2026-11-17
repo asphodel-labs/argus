@@ -56,6 +56,9 @@ type Worktree struct {
 	// Dirty is true if the worktree has changes. Setup does not move a
 	// dirty worktree to the new head.
 	Dirty bool
+	// ExcludeErr is the error of the .worktrees/ line in the info/exclude
+	// file of the clone. It does not stop Setup. The caller shows it.
+	ExcludeErr error
 }
 
 // cloneDir returns the clone directory of repo and whether a clone exists
@@ -127,6 +130,9 @@ func (w *Worktrees) Setup(ctx context.Context, pr model.PR) (Worktree, error) {
 	wt := Worktree{Clone: clone, Dir: filepath.Join(clone, worktreesDir, "argus-pr-"+n)}
 	_, err = os.Stat(wt.Dir)
 	if errors.Is(err, fs.ErrNotExist) {
+		if err := w.excludeWorktrees(ctx, clone); err != nil {
+			wt.ExcludeErr = fmt.Errorf("add %s/ to info/exclude: %w", worktreesDir, err)
+		}
 		_, err = w.git(ctx, clone, "worktree", "add", "--detach", wt.Dir, pr.HeadSHA)
 		return wt, err
 	}
@@ -153,6 +159,51 @@ func (w *Worktrees) Setup(ctx context.Context, pr model.PR) (Worktree, error) {
 	}
 	_, err = w.git(ctx, wt.Dir, "checkout", "--detach", pr.HeadSHA)
 	return wt, err
+}
+
+// excludeWorktrees appends the line ".worktrees/" to the info/exclude file
+// of the clone, so that git status in the clone does not show the PR
+// worktrees. It does nothing if a line already equals ".worktrees/" or
+// "/.worktrees/". It makes the info directory and the file when they are
+// missing, and it does not change the existing lines. `git rev-parse
+// --git-path` finds the file also for a clone with a .git file.
+func (w *Worktrees) excludeWorktrees(ctx context.Context, clone string) error {
+	out, err := w.git(ctx, clone, "rev-parse", "--git-path", "info/exclude")
+	if err != nil {
+		return err
+	}
+	path := strings.TrimSpace(out)
+	if path == "" {
+		return errors.New("git rev-parse --git-path info/exclude returned no path")
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(clone, path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	line := worktreesDir + "/"
+	for l := range strings.SplitSeq(string(data), "\n") {
+		if l = strings.TrimRight(l, " \t\r"); l == line || l == "/"+line {
+			return nil
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
+	if err != nil {
+		return err
+	}
+	if len(data) > 0 && !strings.HasSuffix(string(data), "\n") {
+		line = "\n" + line
+	}
+	_, err = f.WriteString(line + "\n")
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	return err
 }
 
 // MergeBase returns the merge base of origin/<base> and headSha.

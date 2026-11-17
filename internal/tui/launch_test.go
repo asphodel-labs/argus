@@ -19,14 +19,15 @@ import (
 type fakeLauncher struct {
 	mu  sync.Mutex
 	prs []model.PR
+	wt  review.Worktree
 	err error
 }
 
-func (f *fakeLauncher) Launch(_ context.Context, pr model.PR) error {
+func (f *fakeLauncher) Launch(_ context.Context, pr model.PR) (review.Worktree, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.prs = append(f.prs, pr)
-	return f.err
+	return f.wt, f.err
 }
 
 func TestClaudeKeyLaunchesOpenedPR(t *testing.T) {
@@ -39,6 +40,17 @@ func TestClaudeKeyLaunchesOpenedPR(t *testing.T) {
 	}
 	if msg := env.m.Status().Message(); msg != "claude acme/api#7: session started" {
 		t.Fatalf("message %q", msg)
+	}
+}
+
+func TestClaudeKeyShowsExcludeWarning(t *testing.T) {
+	l := &fakeLauncher{wt: review.Worktree{ExcludeErr: errors.New("add .worktrees/ to info/exclude: permission denied")}}
+	env := newActionModel(t, reviewPR())
+	env.m.launcher = l
+	env.press("p")
+	want := "claude acme/api#7: session started; warning: add .worktrees/ to info/exclude: permission denied"
+	if msg := env.m.Status().Message(); msg != want {
+		t.Fatalf("message %q, want %q", msg, want)
 	}
 }
 
@@ -109,16 +121,18 @@ func TestClaudeKeyRunsSetupThenLaunch(t *testing.T) {
 		Runner:    env.runner,
 		SessionID: "s1",
 		Bin:       "/bin/claude",
+		Getenv:    func(string) string { return "" },
 	}
 	env.press("p")
 
 	wtDir := filepath.Join(clone, ".worktrees", "argus-pr-7")
 	want := [][]string{
 		{"git", "-C", clone, "fetch", "origin", "refs/pull/7/head", "+refs/heads/main:refs/remotes/origin/main"},
+		{"git", "-C", clone, "rev-parse", "--git-path", "info/exclude"},
 		{"git", "-C", clone, "worktree", "add", "--detach", wtDir, "abc123"},
 		{"agtermctl", "session", "new", "--workspace-name", "reviews", "--create-workspace",
 			"--cwd", wtDir, "--name", "api#7",
-			"--command", "'/bin/claude' '/pr https://github.com/acme/api/pull/7'"},
+			"--command", `'/bin/zsh' -lc ''\''/bin/claude'\'' '\''/pr https://github.com/acme/api/pull/7'\'''`},
 	}
 	env.runner.mu.Lock()
 	got := env.runner.calls
@@ -126,7 +140,10 @@ func TestClaudeKeyRunsSetupThenLaunch(t *testing.T) {
 	if !slices.EqualFunc(got, want, slices.Equal) {
 		t.Fatalf("calls:\n got %q\nwant %q", got, want)
 	}
-	if msg := env.m.Status().Message(); msg != "claude acme/api#7: session started" {
-		t.Fatalf("message %q", msg)
+	// The fake runner gives no info/exclude path. The status bar shows the
+	// warning, and the launch goes on.
+	msg := env.m.Status().Message()
+	if wantMsg := "claude acme/api#7: session started; warning: add .worktrees/ to info/exclude: git rev-parse --git-path info/exclude returned no path"; msg != wantMsg {
+		t.Fatalf("message %q, want %q", msg, wantMsg)
 	}
 }

@@ -410,7 +410,7 @@ func (l *listPane) renderPR(r listRow, width int, st Styles) string {
 		indent = "  " + st.Title.Render("●") + " "
 	}
 	left := indent + icon + " " + st.Status[r.status].Render(ref) + " " + r.pr.Title
-	right := st.Muted.Render(r.pr.Author.Login + " " + age(l.now().Sub(r.pr.CreatedAt)))
+	right := st.Muted.Render(r.pr.Author.Login + " " + age(l.now().Sub(r.pr.UpdatedAt)))
 	room := width - lipgloss.Width(right) - 1
 	if room < lipgloss.Width(left) {
 		left = ansi.Truncate(left, max(room, 0), "…")

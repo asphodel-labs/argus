@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -16,11 +17,14 @@ import (
 // Workspace is the agterm workspace that holds the Claude sessions.
 const Workspace = "reviews"
 
+// DefaultShell is the login shell when SHELL is empty.
+const DefaultShell = "/bin/zsh"
+
 // ErrNoAgterm is the error of a launch outside agterm.
 var ErrNoAgterm = errors.New("the Claude launch requires agterm")
 
-// Claude starts `claude '/pr <url>'` in the PR worktree in a new agterm
-// session.
+// Claude starts `claude '/pr <url>'` through the login shell of the user
+// in the PR worktree in a new agterm session.
 type Claude struct {
 	// Worktrees prepares the PR worktree.
 	Worktrees *review.Worktrees
@@ -31,21 +35,43 @@ type Claude struct {
 	SessionID string
 	// Agtermctl is the agtermctl command. It is "agtermctl" when empty.
 	Agtermctl string
-	// Bin is the claude command. The new session has the PATH of the
-	// agterm app, so main gives an absolute path. It is "claude" when
-	// empty.
+	// Bin is the claude command. main gives an absolute path. It is
+	// "claude" when empty.
 	Bin string
+	// Getenv reads an environment variable. It is os.Getenv when nil.
+	Getenv func(key string) string
 }
 
-// ClaudeCommand returns the --command value: the claude binary and the
-// "/pr <url>" prompt, each in single quotes. agterm splits the value into
-// arguments and respects the quotes.
-func (c *Claude) ClaudeCommand(pr model.PR) string {
+// Shell returns the login shell of the user: SHELL, or DefaultShell when
+// SHELL is empty.
+func (c *Claude) Shell() string {
+	getenv := c.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	if sh := getenv("SHELL"); sh != "" {
+		return sh
+	}
+	return DefaultShell
+}
+
+// InnerCommand returns the command that the login shell runs: the claude
+// binary and the "/pr <url>" prompt, each in single quotes. The command
+// has only single-quoted words, so fish and POSIX sh read it the same way.
+func (c *Claude) InnerCommand(pr model.PR) string {
 	bin := c.Bin
 	if bin == "" {
 		bin = "claude"
 	}
 	return execx.ShellQuote(bin) + " " + execx.ShellQuote("/pr "+pr.URL)
+}
+
+// ClaudeCommand returns the --command value: `<shell> -lc '<inner>'`.
+// agterm splits the value into arguments with no shell and respects the
+// quotes. The new session has the PATH of the agterm app, so the login
+// shell gives Claude the full PATH of the user (gh, git, Homebrew).
+func (c *Claude) ClaudeCommand(pr model.PR) string {
+	return execx.ShellQuote(c.Shell()) + " -lc " + execx.ShellQuote(c.InnerCommand(pr))
 }
 
 // Command returns the agtermctl command and its arguments that make the
@@ -64,26 +90,27 @@ func (c *Claude) Command(pr model.PR, wt review.Worktree) (name string, args []s
 
 // Launch sets up the PR worktree and starts Claude in a new agterm
 // session. pr must be a PR detail with the head SHA and the base branch.
-// Launch returns ErrNoAgterm outside agterm, and a *review.MissingClone
-// error if the repository has no clone.
-func (c *Claude) Launch(ctx context.Context, pr model.PR) error {
+// Launch returns the worktree, so that the caller can show
+// Worktree.ExcludeErr. Launch returns ErrNoAgterm outside agterm, and a
+// *review.MissingClone error if the repository has no clone.
+func (c *Claude) Launch(ctx context.Context, pr model.PR) (review.Worktree, error) {
 	if c.SessionID == "" {
-		return ErrNoAgterm
+		return review.Worktree{}, ErrNoAgterm
 	}
 	wt, err := c.Worktrees.Setup(ctx, pr)
 	if err != nil {
-		return err
+		return review.Worktree{}, err
 	}
 	name, args := c.Command(pr, wt)
 	_, stderr, code, err := c.Runner.Run(ctx, name, args...)
 	if err != nil {
-		return fmt.Errorf("run %s: %w", name, err)
+		return wt, fmt.Errorf("run %s: %w", name, err)
 	}
 	if code != 0 {
 		if msg := strings.TrimSpace(stderr); msg != "" {
-			return fmt.Errorf("%s session new exited with code %d: %s", name, code, msg)
+			return wt, fmt.Errorf("%s session new exited with code %d: %s", name, code, msg)
 		}
-		return fmt.Errorf("%s session new exited with code %d", name, code)
+		return wt, fmt.Errorf("%s session new exited with code %d", name, code)
 	}
-	return nil
+	return wt, nil
 }

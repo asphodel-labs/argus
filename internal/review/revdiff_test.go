@@ -108,6 +108,7 @@ func TestPrepare(t *testing.T) {
 	}
 	wantCalls(t, r.calls,
 		fetchCall(clone),
+		excludeCall(clone),
 		"git -C "+clone+" worktree add --detach "+wtDir+" abc123",
 		"git -C "+wtDir+" merge-base origin/main abc123",
 	)

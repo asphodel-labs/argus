@@ -28,6 +28,7 @@ type fakeReviewer struct {
 	submitErr  error
 	subs       []review.Submission
 	block      chan struct{}
+	excludeErr error
 }
 
 func (f *fakeReviewer) record(s string) {
@@ -47,7 +48,8 @@ func (f *fakeReviewer) Prepare(_ context.Context, pr model.PR) (review.Session, 
 	if f.prepareErr != nil {
 		return review.Session{}, f.prepareErr
 	}
-	return review.Session{PR: pr, HeadSHA: pr.HeadSHA, MergeBase: "mb1", AnnotationFile: "/state/a.md"}, nil
+	return review.Session{PR: pr, Worktree: review.Worktree{ExcludeErr: f.excludeErr},
+		HeadSHA: pr.HeadSHA, MergeBase: "mb1", AnnotationFile: "/state/a.md"}, nil
 }
 
 func (f *fakeReviewer) Open(_ context.Context, s review.Session) (review.Result, error) {
@@ -104,6 +106,28 @@ func TestReviewKeyRunsRevdiffOnOpenedPR(t *testing.T) {
 	}
 	if env.m.Dialogs() != 0 || env.m.reviewing["PR_1"] {
 		t.Fatalf("dialogs %d, reviewing %v", env.m.Dialogs(), env.m.reviewing)
+	}
+}
+
+// TestReviewKeyShowsExcludeWarning checks that an info/exclude error shows
+// in the status bar and does not stop the review.
+func TestReviewKeyShowsExcludeWarning(t *testing.T) {
+	warn := errors.New("add .worktrees/ to info/exclude: permission denied")
+	r := &fakeReviewer{excludeErr: warn}
+	env := newReviewEnv(t, reviewPR(), r)
+	env.press("v")
+	if msg := env.m.Status().Message(); msg != "revdiff acme/api#7: no annotations; warning: "+warn.Error() {
+		t.Fatalf("message %q", msg)
+	}
+
+	r = &fakeReviewer{excludeErr: warn, result: annotated}
+	env = newReviewEnv(t, reviewPR(), r)
+	env.press("v")
+	if env.m.Dialogs() != 1 {
+		t.Fatalf("dialogs %d, want the review dialog", env.m.Dialogs())
+	}
+	if msg := env.m.Status().Message(); msg != "revdiff acme/api#7: review dialog open; warning: "+warn.Error() {
+		t.Fatalf("message %q", msg)
 	}
 }
 

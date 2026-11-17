@@ -14,12 +14,13 @@ import (
 // Launcher sets up the PR worktree and starts a Claude session with
 // `/pr <url>` in it. launch.Claude implements it.
 type Launcher interface {
-	Launch(ctx context.Context, pr model.PR) error
+	Launch(ctx context.Context, pr model.PR) (review.Worktree, error)
 }
 
 // claudeDoneMsg carries the result of one Claude launch.
 type claudeDoneMsg struct {
 	pr  model.PR
+	wt  review.Worktree
 	err error
 }
 
@@ -30,7 +31,8 @@ func (m *Model) launchClaude(pr model.PR) tea.Cmd {
 	}
 	ctx, l := m.ctx, m.launcher
 	run := func() tea.Msg {
-		return claudeDoneMsg{pr: pr, err: l.Launch(ctx, pr)}
+		wt, err := l.Launch(ctx, pr)
+		return claudeDoneMsg{pr: pr, wt: wt, err: err}
 	}
 	return tea.Batch(m.status.SetMessage("claude: start "+prRef(pr)), run)
 }
@@ -48,5 +50,14 @@ func (m *Model) handleClaudeDone(msg claudeDoneMsg) tea.Cmd {
 	case msg.err != nil:
 		return m.status.SetMessage("claude " + ref + " failed: " + firstLine(msg.err.Error()))
 	}
-	return m.status.SetMessage("claude " + ref + ": session started")
+	return m.status.SetMessage(withWarning("claude "+ref+": session started", msg.wt))
+}
+
+// withWarning adds the info/exclude error of the worktree to the status
+// message. The error does not stop the review or the launch.
+func withWarning(text string, wt review.Worktree) string {
+	if wt.ExcludeErr == nil {
+		return text
+	}
+	return text + "; warning: " + firstLine(wt.ExcludeErr.Error())
 }

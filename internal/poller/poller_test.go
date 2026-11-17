@@ -604,3 +604,25 @@ func TestNotificationsErrorSendsError(t *testing.T) {
 		t.Errorf("notification checks = %d, want 2", notifs)
 	}
 }
+
+// TestStartRefreshNoOrgs checks a config with no orgs: the snapshot has no
+// org section, and the poller runs no org search.
+func TestStartRefreshNoOrgs(t *testing.T) {
+	g := newFakeGH()
+	h := start(t, g, Options{})
+
+	snap := h.snapshot()
+	want := []Scope{{Kind: ScopeNeedsReview}, {Kind: ScopeMine}, {Kind: ScopePersonal}}
+	if len(snap.Sections) != len(want) {
+		t.Fatalf("sections = %+v", snap.Sections)
+	}
+	for i, s := range want {
+		if snap.Sections[i].Scope != s {
+			t.Errorf("section %d = %v, want %v", i, snap.Sections[i].Scope, s)
+		}
+	}
+	wantSearches := []searchCall{{"is:pr is:open user:me sort:updated-desc", ""}}
+	if got := g.takeSearches(); fmt.Sprint(got) != fmt.Sprint(wantSearches) {
+		t.Errorf("searches = %v, want %v", got, wantSearches)
+	}
+}
