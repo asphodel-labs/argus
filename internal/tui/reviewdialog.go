@@ -70,17 +70,15 @@ func (m *Model) handleRevdiffDone(msg revdiffDoneMsg) tea.Cmd {
 		return m.status.SetMessage("revdiff review requires agterm")
 	case msg.err != nil:
 		return m.status.SetMessage("revdiff " + ref + " failed: " + firstLine(msg.err.Error()))
-	case !msg.result.Annotated:
+	case !msg.result.Annotated && (m.github == nil || strings.EqualFold(msg.pr.Author.Login, m.detail.me)):
+		// GitHub refuses an approval of an own PR.
 		return m.status.SetMessage(withWarning("revdiff "+ref+": no annotations", msg.session.Worktree))
+	case !msg.result.Annotated:
+		return m.approveReviewed(msg.session)
 	}
 	d := newReviewDialog(msg.session, msg.result, strings.EqualFold(msg.pr.Author.Login, m.detail.me))
 	id := msg.pr.ID
-	d.headNow = func() string {
-		if pr, ok := m.list.findPR(id); ok {
-			return pr.HeadSHA
-		}
-		return ""
-	}
+	d.headNow = m.headNow(id)
 	r, s := m.reviewer, msg.session
 	d.submit = func(d *reviewDialog, sub review.Submission) tea.Cmd {
 		return m.action(d, id, "review "+ref, true, func(ctx context.Context) (string, error) {
@@ -97,6 +95,52 @@ func (m *Model) handleRevdiffDone(msg revdiffDoneMsg) tea.Cmd {
 		return m.status.SetMessage(withWarning("revdiff "+ref+": review dialog open", wt))
 	}
 	return nil
+}
+
+// approveReviewed opens the approve dialog after a revdiff run with no
+// annotations. The approval is for the head that revdiff showed. esc sends
+// nothing.
+func (m *Model) approveReviewed(s review.Session) tea.Cmd {
+	gh, pr, ref := m.github, s.PR, prRef(s.PR)
+	headNow := m.headNow(pr.ID)
+	d := &textDialog{title: "No comments. Approve " + ref + "?", optional: true}
+	d.note = func() string {
+		if now := headNow(); now != "" && now != s.HeadSHA {
+			return headMovedWarning(now, s.HeadSHA)
+		}
+		return ""
+	}
+	d.submit = func(d *textDialog, body string) tea.Cmd {
+		return m.action(d, pr.ID, "approve "+ref, true, func(ctx context.Context) (string, error) {
+			return "", gh.Approve(ctx, pr.ID, body, s.HeadSHA)
+		})
+	}
+	d.cancel = func() tea.Cmd {
+		return m.status.SetMessage(withWarning("revdiff "+ref+": no annotations; not approved", s.Worktree))
+	}
+	m.dialogs = append(m.dialogs, d)
+	if wt := s.Worktree; wt.Dirty || wt.ExcludeErr != nil {
+		return m.status.SetMessage(withWarning("revdiff "+ref+": approve dialog open", wt))
+	}
+	return nil
+}
+
+// headNow returns a function that gives the head SHA of the PR in the
+// newest snapshot, or "".
+func (m *Model) headNow(id string) func() string {
+	return func() string {
+		if pr, ok := m.list.findPR(id); ok {
+			return pr.HeadSHA
+		}
+		return ""
+	}
+}
+
+// headMovedWarning returns the warning for a PR head that moved from
+// reviewed to now after the checkout.
+func headMovedWarning(now, reviewed string) string {
+	return fmt.Sprintf("⚠ The PR head moved to %s after the checkout. The comments refer to %s.",
+		shortSHA(now), shortSHA(reviewed))
 }
 
 // reviewEvents are the events of the review dialog. GitHub refuses
@@ -227,8 +271,7 @@ func (d *reviewDialog) View(width int) string {
 	pr := d.session.PR
 	lines := []string{ansi.Truncate("Review "+prRef(pr)+": "+pr.Title, width, "…")}
 	if now := d.headMoved(); now != "" {
-		lines = append(lines, ansi.Wrap(fmt.Sprintf("⚠ The PR head moved to %s after the checkout. The comments refer to %s.",
-			shortSHA(now), shortSHA(d.session.HeadSHA)), width, ""))
+		lines = append(lines, ansi.Wrap(headMovedWarning(now, d.session.HeadSHA), width, ""))
 	}
 	n := len(d.result.Threads) + len(d.result.Moved)
 	lines = append(lines, "", fmt.Sprintf("Comments (%d):", n))

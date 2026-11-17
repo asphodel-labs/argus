@@ -17,7 +17,7 @@ import (
 
 // GitHub is the part of gh.Client that the PR actions use.
 type GitHub interface {
-	Approve(ctx context.Context, prID, body string) error
+	Approve(ctx context.Context, prID, body, commitOID string) error
 	Merge(ctx context.Context, prID string, method model.MergeMethod, headSHA string) error
 	EnableAutoMerge(ctx context.Context, prID string, method model.MergeMethod, headSHA string) error
 	AddComment(ctx context.Context, subjectID, body string) error
@@ -187,7 +187,7 @@ func (m *Model) approve(pr model.PR) tea.Cmd {
 	d := &textDialog{title: "Approve " + ref + ": " + pr.Title, optional: true}
 	d.submit = func(d *textDialog, body string) tea.Cmd {
 		return m.action(d, pr.ID, "approve "+ref, true, func(ctx context.Context) (string, error) {
-			return "", gh.Approve(ctx, pr.ID, body)
+			return "", gh.Approve(ctx, pr.ID, body, "")
 		})
 	}
 	return PushDialog(d)

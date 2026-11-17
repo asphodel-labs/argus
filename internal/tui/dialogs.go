@@ -42,8 +42,12 @@ type textDialog struct {
 	text     []rune
 	sending  bool
 	err      error
+	// note returns a warning under the title, or "". It can be nil.
+	note func() string
 	// submit starts the action with the trimmed text.
 	submit func(d *textDialog, text string) tea.Cmd
+	// cancel returns a command for esc, or is nil.
+	cancel func() tea.Cmd
 }
 
 func (d *textDialog) Update(msg tea.KeyPressMsg) (Dialog, tea.Cmd, bool) {
@@ -51,6 +55,9 @@ func (d *textDialog) Update(msg tea.KeyPressMsg) (Dialog, tea.Cmd, bool) {
 	if d.sending {
 		// ctrl+c goes to the root model, which asks before it quits.
 		return d, nil, s != "ctrl+c"
+	}
+	if s == "esc" && d.cancel != nil {
+		return d, tea.Batch(CloseDialog(), d.cancel()), true
 	}
 	if s == "esc" || s == "ctrl+c" {
 		return d, nil, false
@@ -88,7 +95,13 @@ func (d *textDialog) Unsent() bool { return strings.TrimSpace(string(d.text)) !=
 
 func (d *textDialog) View(width int) string {
 	width = max(width, 10)
-	lines := []string{ansi.Truncate(d.title, width, "…"), ""}
+	lines := []string{ansi.Truncate(d.title, width, "…")}
+	if d.note != nil {
+		if note := d.note(); note != "" {
+			lines = append(lines, ansi.Wrap(note, width, ""))
+		}
+	}
+	lines = append(lines, "")
 	body := strings.Split(ansi.Wrap(string(d.text)+"█", width, ""), "\n")
 	if len(body) > textLines {
 		body = body[len(body)-textLines:]

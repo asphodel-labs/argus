@@ -112,12 +112,103 @@ func TestReviewKeyRunsRevdiffOnOpenedPR(t *testing.T) {
 	if got := r.Calls(); !slices.Equal(got, want) {
 		t.Fatalf("calls:\n got %q\nwant %q", got, want)
 	}
+	if env.m.reviewing["PR_1"] {
+		t.Fatalf("reviewing %v", env.m.reviewing)
+	}
+}
+
+// TestCleanRevdiffAsksForApproval checks that revdiff with no annotations
+// on the PR of another user opens the approve dialog for the reviewed head.
+func TestCleanRevdiffAsksForApproval(t *testing.T) {
+	env := newReviewEnv(t, reviewPR(), &fakeReviewer{})
+	env.press("v")
+	if env.m.Dialogs() != 1 {
+		t.Fatalf("dialogs %d, want the approve dialog", env.m.Dialogs())
+	}
+	got := env.dialogText()
+	if !strings.HasPrefix(got, "No comments. Approve acme/api#7?\n") || strings.Contains(got, "head moved") {
+		t.Fatalf("dialog:\n%s", got)
+	}
+	env.typeText("lgtm")
+	env.send(ctrlS)
+	wantCalls(t, env.gh.Calls(), "Approve PR_1 lgtm abc123")
+	if env.m.Dialogs() != 0 {
+		t.Fatal("approve dialog is open")
+	}
+	if msg := env.m.Status().Message(); msg != "approve acme/api#7: done" {
+		t.Fatalf("message %q", msg)
+	}
+}
+
+func TestCleanRevdiffApproveCancel(t *testing.T) {
+	env := newReviewEnv(t, reviewPR(), &fakeReviewer{})
+	env.press("v")
+	env.typeText("x")
+	env.press("esc")
+	if env.m.Dialogs() != 0 {
+		t.Fatalf("dialogs %d after esc", env.m.Dialogs())
+	}
+	wantCalls(t, env.gh.Calls())
+	if msg := env.m.Status().Message(); msg != "revdiff acme/api#7: no annotations; not approved" {
+		t.Fatalf("message %q", msg)
+	}
+}
+
+func TestCleanRevdiffOwnPR(t *testing.T) {
+	pr := reviewPR()
+	pr.Author.Login = "Me"
+	env := newReviewEnv(t, pr, &fakeReviewer{})
+	env.press("v")
+	if env.m.Dialogs() != 0 {
+		t.Fatalf("dialogs %d on an own PR", env.m.Dialogs())
+	}
 	if msg := env.m.Status().Message(); msg != "revdiff acme/api#7: no annotations" {
 		t.Fatalf("message %q", msg)
 	}
-	if env.m.Dialogs() != 0 || env.m.reviewing["PR_1"] {
-		t.Fatalf("dialogs %d, reviewing %v", env.m.Dialogs(), env.m.reviewing)
+	wantCalls(t, env.gh.Calls())
+}
+
+// TestCleanRevdiffHeadMoved checks that the approve dialog warns about a
+// new head and still approves the reviewed head.
+func TestCleanRevdiffHeadMoved(t *testing.T) {
+	env := newReviewEnv(t, reviewPR(), &fakeReviewer{})
+	env.press("v")
+	moved := reviewPR()
+	moved.HeadSHA = "def4567890"
+	env.m.list.setSnapshot(detailSnapshot(moved))
+	if got := env.dialogText(); !strings.Contains(got, "⚠ The PR head moved to def4567 after the checkout.") || !strings.Contains(got, "abc123.") {
+		t.Fatalf("no head-moved warning:\n%s", got)
 	}
+	env.send(ctrlS)
+	wantCalls(t, env.gh.Calls(), "Approve PR_1  abc123")
+}
+
+// TestCleanRevdiffApproveError checks that a GitHub error, for example for
+// a pending review, keeps the approve dialog open with its text.
+func TestCleanRevdiffApproveError(t *testing.T) {
+	env := newReviewEnv(t, reviewPR(), &fakeReviewer{})
+	env.gh.setErr("Approve", errors.New("a pending review exists"))
+	env.press("v")
+	env.typeText("ok")
+	env.send(ctrlS)
+	if env.m.Dialogs() != 1 {
+		t.Fatalf("dialogs %d, want the approve dialog", env.m.Dialogs())
+	}
+	got := env.dialogText()
+	if !strings.Contains(got, "Error: a pending review exists") || !strings.Contains(got, "ok█") {
+		t.Fatalf("dialog:\n%s", got)
+	}
+}
+
+// TestAnnotatedRevdiffOpensReviewDialog checks that exit 10 with
+// annotations still opens the review dialog.
+func TestAnnotatedRevdiffOpensReviewDialog(t *testing.T) {
+	env := newReviewEnv(t, reviewPR(), &fakeReviewer{result: annotated})
+	env.press("v")
+	if _, ok := env.m.topDialog().(*reviewDialog); !ok || env.m.Dialogs() != 1 {
+		t.Fatalf("top dialog %T, want the review dialog", env.m.topDialog())
+	}
+	wantCalls(t, env.gh.Calls())
 }
 
 // TestReviewKeyShowsExcludeWarning checks that an info/exclude error shows
@@ -127,7 +218,7 @@ func TestReviewKeyShowsExcludeWarning(t *testing.T) {
 	r := &fakeReviewer{excludeErr: warn}
 	env := newReviewEnv(t, reviewPR(), r)
 	env.press("v")
-	if msg := env.m.Status().Message(); msg != "revdiff acme/api#7: no annotations; warning: "+warn.Error() {
+	if msg := env.m.Status().Message(); msg != "revdiff acme/api#7: approve dialog open; warning: "+warn.Error() {
 		t.Fatalf("message %q", msg)
 	}
 
@@ -149,7 +240,7 @@ func TestReviewKeyShowsDirtyWarning(t *testing.T) {
 	r := &fakeReviewer{dirty: true}
 	env := newReviewEnv(t, reviewPR(), r)
 	env.press("v")
-	if msg := env.m.Status().Message(); msg != "revdiff acme/api#7: no annotations"+warn {
+	if msg := env.m.Status().Message(); msg != "revdiff acme/api#7: approve dialog open"+warn {
 		t.Fatalf("message %q", msg)
 	}
 

@@ -51,8 +51,8 @@ func (f *fakeGitHub) Calls() []string {
 	return slices.Clone(f.calls)
 }
 
-func (f *fakeGitHub) Approve(_ context.Context, prID, body string) error {
-	return f.record("Approve", prID, body)
+func (f *fakeGitHub) Approve(_ context.Context, prID, body, commitOID string) error {
+	return f.record("Approve", prID, body, commitOID)
 }
 
 func (f *fakeGitHub) Merge(_ context.Context, prID string, method model.MergeMethod, headSHA string) error {
@@ -444,7 +444,7 @@ func TestApproveWithAndWithoutBody(t *testing.T) {
 	env.send(ctrlS)
 	env.press("A")
 	env.send(ctrlS)
-	wantCalls(t, env.gh.Calls(), "Approve PR_1 looks good", "Approve PR_1 ")
+	wantCalls(t, env.gh.Calls(), "Approve PR_1 looks good ", "Approve PR_1  ")
 	if env.m.Dialogs() != 0 {
 		t.Fatal("approve dialog is open")
 	}
@@ -595,7 +595,7 @@ func TestActionKeysUseOpenedPR(t *testing.T) {
 	env.press("A")
 	env.typeText("ok")
 	env.send(ctrlS)
-	wantCalls(t, env.gh.Calls(), "Approve PR_1 ok")
+	wantCalls(t, env.gh.Calls(), "Approve PR_1 ok ")
 }
 
 func TestRerun(t *testing.T) {

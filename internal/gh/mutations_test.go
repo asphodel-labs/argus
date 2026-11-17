@@ -46,7 +46,7 @@ func TestMutationRequestBodies(t *testing.T) {
 			mutation: "addPullRequestReview(input: $input)",
 			data:     `{"addPullRequestReview": {"pullRequestReview": {"id": "PRR_9"}}}`,
 			call: func(c *Client) error {
-				return c.Approve(context.Background(), "PR_1", "Looks good.")
+				return c.Approve(context.Background(), "PR_1", "Looks good.", "")
 			},
 			wantInput: map[string]any{"pullRequestId": "PR_1", "event": "APPROVE", "body": "Looks good."},
 		},
@@ -55,9 +55,18 @@ func TestMutationRequestBodies(t *testing.T) {
 			mutation: "addPullRequestReview(input: $input)",
 			data:     `{"addPullRequestReview": {"pullRequestReview": {"id": "PRR_9"}}}`,
 			call: func(c *Client) error {
-				return c.Approve(context.Background(), "PR_1", "")
+				return c.Approve(context.Background(), "PR_1", "", "")
 			},
 			wantInput: map[string]any{"pullRequestId": "PR_1", "event": "APPROVE"},
+		},
+		{
+			name:     "approve a commit",
+			mutation: "addPullRequestReview(input: $input)",
+			data:     `{"addPullRequestReview": {"pullRequestReview": {"id": "PRR_9"}}}`,
+			call: func(c *Client) error {
+				return c.Approve(context.Background(), "PR_1", "", "abc123")
+			},
+			wantInput: map[string]any{"pullRequestId": "PR_1", "event": "APPROVE", "commitOID": "abc123"},
 		},
 		{
 			name:     "merge",
@@ -462,7 +471,7 @@ func TestMutationGraphQLError(t *testing.T) {
 func TestMutationErrorsPassThrough(t *testing.T) {
 	const body = `{"data": null, "errors": [{"type": "FORBIDDEN", "message": "Resource not accessible by integration"}]}`
 	calls := map[string]func(c *Client) error{
-		"approve": func(c *Client) error { return c.Approve(context.Background(), "PR_1", "") },
+		"approve": func(c *Client) error { return c.Approve(context.Background(), "PR_1", "", "") },
 		"auto-merge": func(c *Client) error {
 			return c.EnableAutoMerge(context.Background(), "PR_1", model.MergeMethodMerge, "")
 		},

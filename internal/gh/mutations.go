@@ -97,11 +97,16 @@ type addReviewResponse struct {
 	} `json:"addPullRequestReview"`
 }
 
-// Approve submits an approving review on the PR. An empty body sends no body.
-func (c *Client) Approve(ctx context.Context, prID, body string) error {
+// Approve submits an approving review on the PR. An empty body sends no
+// body. commitOID is the commit that the review approves. An empty
+// commitOID sends no commitOID, and GitHub uses the PR head.
+func (c *Client) Approve(ctx context.Context, prID, body, commitOID string) error {
 	input := map[string]any{"pullRequestId": prID, "event": string(ReviewApprove)}
 	if body != "" {
 		input["body"] = body
+	}
+	if commitOID != "" {
+		input["commitOID"] = commitOID
 	}
 	return c.mutate(ctx, "approve "+prID, addReviewMutation, input, &addReviewResponse{})
 }

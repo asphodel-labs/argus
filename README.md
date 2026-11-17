@@ -220,6 +220,9 @@ On the first run, argus records the state and sends no notifications.
 `v` then opens revdiff in an agterm overlay on the diff from the merge base to the PR head:
 
 - If you write annotations, argus opens the review dialog. Select Comment, Approve, or Request changes, and add a review body.
+- If you close revdiff with no annotations, argus asks: `No comments. Approve owner/repo#n?`. Add an optional body and press `ctrl+s` to approve. The approval is for the commit that revdiff showed. If the PR head moved after the checkout, the dialog shows a warning. `esc` sends nothing.
+- On your own PR, argus does not ask for approval, because GitHub refuses it. The status bar shows `no annotations`.
+- If you have a pending review on the PR, GitHub refuses the approval. The dialog shows the error. Submit or delete the pending review on GitHub first.
 - argus posts each annotation as one review thread. It supports line, line range, removed-line, and file-level annotations.
 - A line comment outside every diff hunk goes into the review body as `path:L — text`. The dialog marks these comments.
 - If the PR head moved after the checkout, the dialog shows a warning.
