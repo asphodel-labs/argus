@@ -102,7 +102,7 @@ func run() error {
 		Me:       cfg.User,
 	}
 	m := tui.New(tui.Options{Context: ctx, Poller: p, Notifier: notifier, Detail: client, Styles: styles,
-		GitHub: client, Merges: merges, Runner: execx.Exec{}, Cloner: worktrees, Reviewer: reviewer, Launcher: launcher,
+		Search: client, Orgs: cfg.Orgs, GitHub: client, Merges: merges, Runner: execx.Exec{}, Cloner: worktrees, Reviewer: reviewer, Launcher: launcher,
 		Me: cfg.User, BotLogins: cfg.BotLogins,
 	})
 	_, err = tea.NewProgram(m).Run()

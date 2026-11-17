@@ -475,7 +475,7 @@ func (m *Model) handleListKey(msg tea.KeyPressMsg) tea.Cmd {
 			return m.openPR(pr)
 		}
 	case "/":
-		return PushDialog(newFinder(l.finderEntries()))
+		return PushDialog(m.newFinder(l.finderEntries()))
 	case "a":
 		l.filters.HideApproved = !l.filters.HideApproved
 		m.filtersChanged()

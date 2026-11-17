@@ -80,11 +80,13 @@ func (r Repo) FullName() string {
 // The detail query also fills Body, Checks, Reviews, Comments, and the
 // merge fields.
 type PR struct {
-	ID             string
-	Repo           Repo
-	Number         int
-	Title          string
-	URL            string
+	ID     string
+	Repo   Repo
+	Number int
+	Title  string
+	URL    string
+	// State is the GitHub PullRequestState: OPEN, CLOSED, or MERGED.
+	State          string
 	Author         Actor
 	IsDraft        bool
 	Mergeable      Mergeable

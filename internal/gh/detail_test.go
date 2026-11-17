@@ -40,6 +40,9 @@ func TestPRDetailFull(t *testing.T) {
 	if pr.Body != "Retry the upload three times.\n\n## Notes\nNo API change." {
 		t.Errorf("body = %q", pr.Body)
 	}
+	if pr.State != "OPEN" {
+		t.Errorf("state = %q, want OPEN", pr.State)
+	}
 	if pr.ReviewDecision != model.DecisionChangesRequested || pr.Mergeable != model.MergeableYes || pr.Rollup != model.CheckFailure {
 		t.Errorf("decision, mergeable, rollup = %q %q %q", pr.ReviewDecision, pr.Mergeable, pr.Rollup)
 	}

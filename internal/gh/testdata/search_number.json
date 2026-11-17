@@ -1,0 +1,51 @@
+{
+  "data": {
+    "rateLimit": {"cost": 1, "remaining": 4998, "resetAt": "2026-11-17T12:00:00Z"},
+    "search": {
+      "issueCount": 2,
+      "pageInfo": {"endCursor": "Y3Vyc29yOjI=", "hasNextPage": false},
+      "nodes": [
+        {
+          "id": "PR_kwDOBackend6505",
+          "number": 6505,
+          "title": "Move the report export to the queue",
+          "url": "https://github.com/globex/Backend/pull/6505",
+          "state": "MERGED",
+          "isDraft": false,
+          "mergeable": "UNKNOWN",
+          "reviewDecision": "APPROVED",
+          "createdAt": "2026-09-02T08:00:00Z",
+          "updatedAt": "2026-09-05T14:00:00Z",
+          "headRefOid": "dddddddddddddddddddddddddddddddddddddddd",
+          "baseRefName": "main",
+          "repository": {"name": "Backend", "owner": {"login": "globex"}},
+          "author": {"__typename": "User", "login": "octocat"},
+          "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "SUCCESS"}}}]},
+          "comments": {"totalCount": 0, "nodes": []},
+          "reviews": {"totalCount": 1, "nodes": [{"author": {"__typename": "User", "login": "alice"}, "createdAt": "2026-09-04T10:00:00Z", "submittedAt": "2026-09-04T10:00:00Z"}]},
+          "reviewThreads": {"totalCount": 0, "nodes": []}
+        },
+        {
+          "id": "PR_kwDOBackend5105",
+          "number": 5105,
+          "title": "Follow-up to 6505: fix the export retry",
+          "url": "https://github.com/globex/Backend/pull/5105",
+          "state": "OPEN",
+          "isDraft": false,
+          "mergeable": "MERGEABLE",
+          "reviewDecision": null,
+          "createdAt": "2026-10-01T08:00:00Z",
+          "updatedAt": "2026-10-02T08:00:00Z",
+          "headRefOid": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "baseRefName": "main",
+          "repository": {"name": "Backend", "owner": {"login": "globex"}},
+          "author": {"__typename": "User", "login": "bob"},
+          "commits": {"nodes": []},
+          "comments": {"totalCount": 0, "nodes": []},
+          "reviews": {"totalCount": 0, "nodes": []},
+          "reviewThreads": {"totalCount": 0, "nodes": []}
+        }
+      ]
+    }
+  }
+}

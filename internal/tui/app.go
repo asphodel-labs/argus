@@ -83,6 +83,11 @@ type Options struct {
 	// Detail loads the PR detail for the detail pane. Without it the
 	// detail pane shows "Loading" for each PR.
 	Detail Detailer
+	// Search finds a PR by number on GitHub for the finder. Without it the
+	// finder does not offer the GitHub search.
+	Search PRSearcher
+	// Orgs are the configured organizations. The finder search uses them.
+	Orgs []string
 	// GitHub runs the PR actions. Without it the action keys show a
 	// message.
 	GitHub GitHub
@@ -119,6 +124,8 @@ type Model struct {
 	poller   Poller
 	notifier Notifier
 	detailer Detailer
+	searcher PRSearcher
+	orgs     []string
 	github   GitHub
 	merges   MergeMemory
 	runner   execx.Runner
@@ -165,6 +172,8 @@ func New(opts Options) *Model {
 	m := &Model{
 		ctx:      ctx,
 		github:   opts.GitHub,
+		searcher: opts.Search,
+		orgs:     opts.Orgs,
 		merges:   opts.Merges,
 		runner:   opts.Runner,
 		cloner:   opts.Cloner,
@@ -284,6 +293,8 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		m.status.clearMessage(msg.id)
 	case finderPickMsg:
 		return m.handleFinderPick(msg.entry)
+	case finderSearchDoneMsg:
+		return m.handleFinderSearchDone(msg)
 	case authorFilterMsg:
 		m.list.filters.Author = msg.login
 		m.filtersChanged()

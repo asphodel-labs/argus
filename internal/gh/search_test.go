@@ -408,3 +408,40 @@ func TestPRStatesHTTPError(t *testing.T) {
 		t.Errorf("err = %v, want HTTPError", err)
 	}
 }
+
+func TestSearchPRs(t *testing.T) {
+	c, ft := newTestClient(t, func(gqlRequest) reply { return fixture(t, "search_number.json") })
+
+	q := "is:pr 6505 org:globex user:octocat"
+	prs, err := c.SearchPRs(context.Background(), q, 10)
+	if err != nil {
+		t.Fatalf("SearchPRs: %v", err)
+	}
+	reqs := ft.requests()
+	if len(reqs) != 1 {
+		t.Fatalf("requests = %d, want 1", len(reqs))
+	}
+	if vars := reqs[0].Variables; vars["q"] != q || vars["first"] != float64(10) {
+		t.Errorf("variables = %v", vars)
+	}
+	if !strings.Contains(reqs[0].Query, "state\n") {
+		t.Errorf("query does not request the PR state")
+	}
+	// The search also finds #5105 for the number in its title.
+	if len(prs) != 2 || prs[0].Number != 6505 || prs[1].Number != 5105 {
+		t.Fatalf("PRs = %+v", prs)
+	}
+	if prs[0].State != "MERGED" || prs[1].State != "OPEN" {
+		t.Errorf("states = %q %q", prs[0].State, prs[1].State)
+	}
+	if prs[0].Repo != (model.Repo{Owner: "globex", Name: "Backend"}) || prs[0].Rollup != model.CheckSuccess {
+		t.Errorf("summary = %+v", prs[0])
+	}
+}
+
+func TestSearchPRsError(t *testing.T) {
+	c, _ := newTestClient(t, func(gqlRequest) reply { return fixture(t, "search_graphql_error.json") })
+	if _, err := c.SearchPRs(context.Background(), "is:pr 1", 10); err == nil {
+		t.Fatal("SearchPRs: no error")
+	}
+}

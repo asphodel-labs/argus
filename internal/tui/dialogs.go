@@ -131,6 +131,8 @@ func mergeLabel(m model.MergeMethod) string {
 func mergePlan(pr model.PR) (blocked string, auto bool) {
 	pending := pr.Rollup == model.CheckPending || pr.Rollup == model.CheckExpected
 	switch {
+	case pr.State == "CLOSED" || pr.State == "MERGED":
+		return "the PR is not open", false
 	case pr.IsDraft:
 		return "the PR is a draft", false
 	case pr.Mergeable == model.MergeableConflicting || pr.MergeStateStatus == "DIRTY":

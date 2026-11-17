@@ -10,6 +10,7 @@
         "number": 42,
         "title": "Add retry to the uploader",
         "url": "https://github.com/acme/api/pull/42",
+        "state": "OPEN",
         "body": "Retry the upload three times.\n\n## Notes\nNo API change.",
         "isDraft": false,
         "mergeable": "MERGEABLE",

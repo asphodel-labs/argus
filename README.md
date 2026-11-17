@@ -128,7 +128,7 @@ List pane:
 | `]` / `[` | Move to the next / previous section. |
 | `enter` / `space` | Open the PR in the detail pane. The focus stays in the list. |
 | `za` | Fold the repo group or the section. |
-| `/` | Open the fuzzy finder. |
+| `/` | Open the fuzzy finder. A PR number that matches no loaded PR offers a GitHub search. |
 | `a` | Hide the approved PRs. |
 | `d` | Hide the draft PRs. |
 | `b` | Show all PRs, only bot PRs, or no bot PRs. |
@@ -142,6 +142,15 @@ The list marks the opened PR with `●`.
 The fuzzy finder searches the PRs that the list shows after the filters. It also searches the folded groups and sections.
 It matches the title, the number (`812` or `#812`), the repo, and the author.
 `enter` moves the cursor to the PR, unfolds its group and section, and opens the PR.
+
+The list loads only the newest PRs of each section, so the finder can miss an older PR.
+A query can name a PR by number: `6505`, `#6505`, `repo#6505`, or `owner/repo#6505`. The repo and the owner match without case.
+If no loaded PR has that number, the last row is `search GitHub for #6505`.
+`enter` on that row sends one GitHub search over the configured orgs and your user. `repo#n` keeps only the PRs of that repo. `owner/repo#n` searches only that repo.
+The search also finds closed and merged PRs. The row shows the state.
+One match closes the finder and opens the PR. If the list does not show the PR, the list cursor stays, and the status bar shows `opened owner/repo#n (not in the list)`.
+More matches replace the search row with one row for each PR. No match or an error shows a status message, and the finder stays open.
+The action keys work on a PR that you open this way. `M` on a closed or merged PR shows "the PR is not open".
 
 Detail pane:
 

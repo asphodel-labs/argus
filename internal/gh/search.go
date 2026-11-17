@@ -40,6 +40,7 @@ var searchQuery = `query Search($q: String!, $first: Int!, $after: String) {
         number
         title
         url
+        state
         isDraft
         mergeable
         reviewDecision
@@ -117,6 +118,7 @@ type prSummaryJSON struct {
 	Number         int        `json:"number"`
 	Title          string     `json:"title"`
 	URL            string     `json:"url"`
+	State          string     `json:"state"`
 	IsDraft        bool       `json:"isDraft"`
 	Mergeable      string     `json:"mergeable"`
 	ReviewDecision *string    `json:"reviewDecision"`
@@ -173,6 +175,7 @@ func (p prSummaryJSON) pr() model.PR {
 		Number:       p.Number,
 		Title:        p.Title,
 		URL:          p.URL,
+		State:        p.State,
 		Author:       p.Author.actor(),
 		IsDraft:      p.IsDraft,
 		Mergeable:    model.Mergeable(p.Mergeable),
@@ -260,6 +263,16 @@ func (c *Client) Search(ctx context.Context, q string, first int, after string) 
 		res.PRs = append(res.PRs, n.pr())
 	}
 	return res, nil
+}
+
+// SearchPRs returns the PRs of the first page of the search query q, with
+// first PRs or fewer.
+func (c *Client) SearchPRs(ctx context.Context, q string, first int) ([]model.PR, error) {
+	res, err := c.Search(ctx, q, first, "")
+	if err != nil {
+		return nil, err
+	}
+	return res.PRs, nil
 }
 
 // SearchAll returns every PR for the search query q. It reads pages of

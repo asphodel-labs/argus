@@ -38,6 +38,7 @@ var detailQuery = fmt.Sprintf(`query PRDetail($owner: String!, $repo: String!, $
       number
       title
       url
+      state
       body
       isDraft
       mergeable
