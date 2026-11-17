@@ -265,6 +265,8 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		m.resize()
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+	case tea.MouseClickMsg, tea.MouseWheelMsg:
+		return m.handleMouse(msg.(tea.MouseMsg))
 	case PushDialogMsg:
 		m.dialogs = append(m.dialogs, msg.Dialog)
 	case CloseDialogMsg:
@@ -449,6 +451,7 @@ func (m *Model) View() tea.View {
 	}
 	v := tea.NewView(main + "\n" + m.status.Render(m.width, m.styles))
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 

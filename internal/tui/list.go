@@ -460,12 +460,18 @@ func (m *Model) handleListKey(msg tea.KeyPressMsg) tea.Cmd {
 		l.move(1)
 	case "k", "up":
 		l.move(-1)
-	case "G":
+	case "G", "end":
 		l.setCursor(len(l.rows) - 1)
+	case "home":
+		l.setCursor(0)
 	case "ctrl+d":
 		l.move(max(l.height/2, 1))
 	case "ctrl+u":
 		l.move(-max(l.height/2, 1))
+	case "pgdown":
+		l.move(max(l.height, 1))
+	case "pgup":
+		l.move(-max(l.height, 1))
 	case "]":
 		l.jumpSection(1)
 	case "[":

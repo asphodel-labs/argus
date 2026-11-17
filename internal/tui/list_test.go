@@ -399,6 +399,7 @@ func TestListSelectionFallbacks(t *testing.T) {
 func TestListNavigation(t *testing.T) {
 	m := newListModel(t)
 	last := len(m.list.rows) - 1
+	page := m.list.height
 	steps := []struct {
 		keys []string
 		want int
@@ -418,6 +419,11 @@ func TestListNavigation(t *testing.T) {
 		{[]string{"ctrl+d"}, last},
 		{[]string{"ctrl+u", "ctrl+u"}, 0},
 		{[]string{"g", "x", "j"}, 1},
+		{[]string{"down", "down", "up"}, 2},
+		{[]string{"end"}, last},
+		{[]string{"home"}, 0},
+		{[]string{"pgdown"}, min(page, last)},
+		{[]string{"pgup"}, 0},
 	}
 	for i, s := range steps {
 		sendKeys(m, s.keys...)

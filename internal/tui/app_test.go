@@ -164,6 +164,10 @@ func TestFocusKeys(t *testing.T) {
 		{"l", FocusDetail},
 		{"h", FocusList},
 		{"h", FocusList},
+		{"right", FocusDetail},
+		{"right", FocusDetail},
+		{"left", FocusList},
+		{"left", FocusList},
 	}
 	for i, s := range steps {
 		m.Update(key(s.key))

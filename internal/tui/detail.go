@@ -239,12 +239,18 @@ func (m *Model) handleDetailKey(msg tea.KeyPressMsg) tea.Cmd {
 		d.offset++
 	case "k", "up":
 		d.offset--
-	case "G":
+	case "G", "end":
 		d.offset = len(d.lines)
+	case "home":
+		d.offset = 0
 	case "ctrl+d":
 		d.offset += max(d.height/2, 1)
 	case "ctrl+u":
 		d.offset -= max(d.height/2, 1)
+	case "pgdown":
+		d.offset += max(d.height, 1)
+	case "pgup":
+		d.offset -= max(d.height, 1)
 	case "]":
 		d.jumpItem(1)
 	case "[":

@@ -124,16 +124,17 @@ Global keys:
 | `?` | Show the help. |
 | `q` / `ctrl+c` | Quit. argus asks first if a dialog has text that you did not send. |
 | `tab` | Switch the pane. |
-| `h` / `l` | Focus the list pane / the detail pane. |
+| `h` / `l`, `←` / `→` | Focus the list pane / the detail pane. |
 | `esc` | Close a dialog. |
 
 List pane:
 
 | Key | Action |
 |---|---|
-| `j` / `k` | Move down / up. |
-| `gg` / `G` | Move to the top / the bottom. |
+| `j` / `k`, `↓` / `↑` | Move down / up. |
+| `gg` / `G`, `home` / `end` | Move to the top / the bottom. |
 | `ctrl+d` / `ctrl+u` | Move a half page down / up. |
+| `pgdown` / `pgup` | Move a page down / up. |
 | `]` / `[` | Move to the next / previous section. |
 | `enter` | Open the PR in the detail pane and move the focus to it. |
 | `space` | Open the PR in the detail pane. The focus stays in the list. |
@@ -166,9 +167,10 @@ Detail pane:
 
 | Key | Action |
 |---|---|
-| `j` / `k` | Scroll down / up. |
-| `gg` / `G` | Scroll to the top / the bottom. |
+| `j` / `k`, `↓` / `↑` | Scroll down / up. |
+| `gg` / `G`, `home` / `end` | Scroll to the top / the bottom. |
 | `ctrl+d` / `ctrl+u` | Scroll a half page down / up. |
+| `pgdown` / `pgup` | Scroll a page down / up. |
 | `]` / `[` | Move to the next / previous thread. |
 | `za` | Fold the thread. |
 
@@ -190,6 +192,17 @@ With no opened PR, they show "open a PR with enter".
 | `o` | Open the PR in the browser. |
 | `p` | Open a Claude `/pr` session. |
 | `v` | Review with revdiff. |
+
+The mouse also works in the panes:
+
+- A click focuses the pane.
+- In the list, a click on a PR opens it. A click on a section or a repo row folds it. A click on the `load more` row loads more PRs.
+- In the detail pane, a click on the header of a thread, a comment, or a review folds it.
+- The wheel scrolls the pane under the pointer. In the list, the cursor stays in the view.
+- The mouse does nothing while a dialog or the help is open.
+
+argus captures the mouse, so a plain drag does not select text.
+To select text, hold `shift` while you drag. In iTerm2, hold `option`.
 
 ## Refresh and rate limit
 

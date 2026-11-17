@@ -540,6 +540,11 @@ func TestDetailScroll(t *testing.T) {
 		{[]string{"g", "g"}, 0},
 		{[]string{"ctrl+d"}, d.height / 2},
 		{[]string{"ctrl+u", "ctrl+u"}, 0},
+		{[]string{"down", "down", "up"}, 1},
+		{[]string{"end"}, bottom},
+		{[]string{"home"}, 0},
+		{[]string{"pgdown"}, min(d.height, bottom)},
+		{[]string{"pgup"}, 0},
 	}
 	for i, s := range steps {
 		press(m, s.keys...)
