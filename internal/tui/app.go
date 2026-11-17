@@ -3,6 +3,7 @@ package tui
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"time"
 
@@ -133,8 +134,10 @@ type Model struct {
 	reviewer Reviewer
 	launcher Launcher
 	openCmd  string
-	styles   Styles
-	keys     KeyMap
+	// pbcopy is true on macOS. Then the y key also runs pbcopy.
+	pbcopy bool
+	styles Styles
+	keys   KeyMap
 
 	width, height int
 	focus         Focus
@@ -180,6 +183,7 @@ func New(opts Options) *Model {
 		reviewer: opts.Reviewer,
 		launcher: opts.Launcher,
 		openCmd:  openCmd,
+		pbcopy:   runtime.GOOS == "darwin",
 		poller:   opts.Poller,
 		notifier: opts.Notifier,
 		detailer: opts.Detail,
@@ -279,6 +283,8 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		return m.handleNotifyDone(msg.err)
 	case actionDoneMsg:
 		return m.handleActionDone(msg)
+	case yankDoneMsg:
+		return m.handleYankDone(msg)
 	case CloneNeededMsg:
 		return m.handleCloneNeeded(msg)
 	case revdiffDoneMsg:

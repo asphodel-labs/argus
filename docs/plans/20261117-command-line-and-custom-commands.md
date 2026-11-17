@@ -148,11 +148,11 @@
 - Modify: `internal/tui/keys.go`
 - Create: `internal/tui/yank_test.go`
 
-- [ ] handle `y` in `handleActionKey`: send `tea.SetClipboard(pr.URL)`, and on macOS also run `sh -c 'printf %s "$1" | pbcopy' sh <url>` through `execx.Runner`
-- [ ] add `y` "copy URL" to `KeyMap.Actions`
-- [ ] write tests: `y` with an opened PR gives the clipboard command and the status message, and `y` with no opened PR shows "open a PR with enter"
-- [ ] write a test for a `pbcopy` failure: the status bar shows the error and the OSC 52 command still runs
-- [ ] run `make test`: it must pass before task 6
+- [x] handle `y` in `handleActionKey`: send `tea.SetClipboard(pr.URL)`, and on macOS also run `sh -c 'printf %s "$1" | pbcopy' sh <url>` through `execx.Runner`
+- [x] add `y` "copy URL" to `KeyMap.Actions`
+- [x] write tests: `y` with an opened PR gives the clipboard command and the status message, and `y` with no opened PR shows "open a PR with enter"
+- [x] write a test for a `pbcopy` failure: the status bar shows the error and the OSC 52 command still runs
+- [x] run `make test`: it must pass before task 6
 
 ### Task 6: Add the command line with the built-in commands
 

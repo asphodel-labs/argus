@@ -83,6 +83,7 @@ func DefaultKeyMap() KeyMap {
 			{Keys: []string{"+"}, Desc: "react"},
 			{Keys: []string{"x"}, Desc: "resolve thread"},
 			{Keys: []string{"o"}, Desc: "open in browser"},
+			{Keys: []string{"y"}, Desc: "copy URL"},
 			{Keys: []string{"p"}, Desc: "Claude /pr session"},
 			{Keys: []string{"v"}, Desc: "review with revdiff"},
 		},
