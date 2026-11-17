@@ -57,6 +57,9 @@ func TestPRDetailFull(t *testing.T) {
 	if pr.HeadSHA != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" || pr.BaseRef != "main" {
 		t.Errorf("head, base = %q %q", pr.HeadSHA, pr.BaseRef)
 	}
+	if pr.HeadRef != "feature/login" {
+		t.Errorf("HeadRef = %q, want feature/login", pr.HeadRef)
+	}
 
 	wantChecks := []model.Check{
 		{Name: "test", Status: "COMPLETED", Conclusion: "FAILURE", App: "github-actions",

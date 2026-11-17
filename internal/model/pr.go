@@ -99,9 +99,11 @@ type PR struct {
 	ReviewDecision ReviewDecision
 	Rollup         CheckState
 	HeadSHA        string
-	BaseRef        string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	// HeadRef is the head branch name. Only the detail query sets it.
+	HeadRef   string
+	BaseRef   string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 
 	// Threads holds the review threads. A summary can hold only the last
 	// comment of each thread.

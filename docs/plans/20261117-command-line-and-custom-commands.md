@@ -107,11 +107,11 @@
 - Modify: `internal/gh/testdata/detail_full.json`
 - Modify: `internal/gh/detail_test.go`
 
-- [ ] add `HeadRef string` to `model.PR`
-- [ ] add `headRefName` to the detail query and set `HeadRef` in the decode
-- [ ] add `headRefName` to the recorded detail fixture
-- [ ] assert `HeadRef` in `detail_test.go`
-- [ ] run `make test`: it must pass before task 3
+- [x] add `HeadRef string` to `model.PR`
+- [x] add `headRefName` to the detail query and set `HeadRef` in the decode
+- [x] add `headRefName` to the recorded detail fixture
+- [x] assert `HeadRef` in `detail_test.go`
+- [x] run `make test`: it must pass before task 3
 
 ### Task 3: Parse custom commands in the config
 
