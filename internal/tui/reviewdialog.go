@@ -139,7 +139,7 @@ func (m *Model) headNow(id string) func() string {
 // headMovedWarning returns the warning for a PR head that moved from
 // reviewed to now after the checkout.
 func headMovedWarning(now, reviewed string) string {
-	return fmt.Sprintf("⚠ The PR head moved to %s after the checkout. The comments refer to %s.",
+	return fmt.Sprintf("⚠ The PR head moved to %s after the checkout. The review applies to %s.",
 		shortSHA(now), shortSHA(reviewed))
 }
 
