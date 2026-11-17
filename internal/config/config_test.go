@@ -177,6 +177,25 @@ run = "git switch {{.Branch}}"
 	}
 }
 
+func TestLoadCommandBranches(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg, err := Load(writeConfig(t, `
+[[commands]]
+name = "open"
+run = "{{$b := .Branch}}{{if .Title}}echo {{$b}} {{$.Base}}{{else}}echo {{.Number}}{{end}}{{with .URL}} {{.}}{{end}}"
+`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got, err := cfg.Commands[0].Render(model.PR{HeadRef: "x", BaseRef: "main", Title: "T", URL: "u"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if want := "echo 'x' 'main' 'u'"; got != want {
+		t.Errorf("Render = %q, want %q", got, want)
+	}
+}
+
 func TestCommandRenderQuotesFields(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	cfg, err := Load(writeConfig(t, `
@@ -235,7 +254,25 @@ name = "sync"
 run = "echo {{.Branch"`, `command "sync": parse run`},
 		{"unknown field", `[[commands]]
 name = "sync"
-run = "echo {{.Head}}"`, `command "sync": render run`},
+run = "echo {{.Head}}"`, `command "sync": check run: unknown field "Head"`},
+		{"unknown field in a branch", `[[commands]]
+name = "sync"
+run = "{{if .Title}}echo {{.Titel}}{{end}}"`, `command "sync": check run: unknown field "Titel"`},
+		{"unknown field in an else branch", `[[commands]]
+name = "sync"
+run = "{{if eq .Number \"'1'\"}}true{{else}}echo {{$.Titel}}{{end}}"`, `unknown field "Titel"`},
+		{"unknown field in a defined template", `[[commands]]
+name = "sync"
+run = "{{define \"t\"}}{{.Titel}}{{end}}{{if .Title}}{{template \"t\" .}}{{end}}"`, `unknown field "Titel"`},
+		{"field of a field", `[[commands]]
+name = "sync"
+run = "{{with .Title}}{{end}}echo {{.Title.Len}}"`, `field "Len" of a string`},
+		{"missing run", `[[commands]]
+name = "sync"
+command = "gh stack sync"`, `command "sync": run is empty`},
+		{"blank run", `[[commands]]
+name = "sync"
+run = "  "`, `command "sync": run is empty`},
 		{"duplicate key", `[[commands]]
 name = "a"
 key = "S"

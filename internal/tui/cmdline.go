@@ -106,13 +106,15 @@ func (c *commandLine) complete() {
 	if len(found) == 0 {
 		return
 	}
-	common := found[0]
+	// The prefix is a rune slice, so that a cut does not split a
+	// multi-byte rune.
+	common := []rune(found[0])
 	for _, n := range found[1:] {
-		for !strings.HasPrefix(n, common) {
+		for !strings.HasPrefix(n, string(common)) {
 			common = common[:len(common)-1]
 		}
 	}
-	c.text = []rune(common)
+	c.text = common
 }
 
 // View returns the line: the text and the matching command names.
@@ -127,11 +129,15 @@ func (c *commandLine) View(width int) string {
 func (c *commandLine) Unsent() bool { return false }
 
 // handleCommandLine closes the command line and runs the command of the
-// name. An empty name only closes the line.
+// name. An empty name only closes the line. A message from a line that is
+// already closed does nothing. A second enter before the first message
+// arrives sends this message, and the command must not run two times.
 func (m *Model) handleCommandLine(msg commandLineMsg) tea.Cmd {
-	if i := slices.Index(m.dialogs, Dialog(msg.d)); i >= 0 {
-		m.dialogs = slices.Delete(m.dialogs, i, i+1)
+	i := slices.Index(m.dialogs, Dialog(msg.d))
+	if i < 0 {
+		return nil
 	}
+	m.dialogs = slices.Delete(m.dialogs, i, i+1)
 	if msg.name == "" {
 		return nil
 	}

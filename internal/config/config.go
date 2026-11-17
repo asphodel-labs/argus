@@ -9,9 +9,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"text/template"
+	"text/template/parse"
 	"time"
 	"unicode"
 
@@ -256,17 +258,109 @@ func parseCommands(fcs []fileCommand) ([]Command, error) {
 			keys[fc.Key] = fc.Name
 		}
 
+		if strings.TrimSpace(fc.Run) == "" {
+			return nil, fmt.Errorf("command %q: run is empty", fc.Name)
+		}
 		t, err := template.New(fc.Name).Parse(fc.Run)
 		if err != nil {
 			return nil, fmt.Errorf("command %q: parse run: %w", fc.Name, err)
 		}
-		// A render with zero values finds an unknown field at load.
+		// The render skips a branch that it does not take, so a walk of
+		// the parse tree checks the field names in each branch.
+		for _, tt := range t.Templates() {
+			if tt.Tree == nil {
+				continue
+			}
+			if err := checkFields(tt.Root); err != nil {
+				return nil, fmt.Errorf("command %q: check run: %w", fc.Name, err)
+			}
+		}
+		// A render with zero values finds other execute errors at load.
 		if _, err := execute(t, CommandData{}); err != nil {
 			return nil, fmt.Errorf("command %q: render run: %w", fc.Name, err)
 		}
 		cmds = append(cmds, Command{Name: fc.Name, Key: fc.Key, Mode: mode, Run: t})
 	}
 	return cmds, nil
+}
+
+// checkFields returns an error for a field name in the node n that is not
+// a field of CommandData. Each CommandData field is a string, so a field of
+// a field is also an error.
+func checkFields(n parse.Node) error {
+	switch n := n.(type) {
+	case *parse.ListNode:
+		if n == nil {
+			return nil
+		}
+		for _, c := range n.Nodes {
+			if err := checkFields(c); err != nil {
+				return err
+			}
+		}
+	case *parse.ActionNode:
+		return checkFields(n.Pipe)
+	case *parse.PipeNode:
+		if n == nil {
+			return nil
+		}
+		for _, c := range n.Cmds {
+			if err := checkFields(c); err != nil {
+				return err
+			}
+		}
+	case *parse.CommandNode:
+		for _, a := range n.Args {
+			if err := checkFields(a); err != nil {
+				return err
+			}
+		}
+	case *parse.FieldNode:
+		return checkField(n.Ident)
+	case *parse.VariableNode:
+		// $ is the CommandData value. Another variable holds a value
+		// that the walk does not know.
+		if n.Ident[0] == "$" && len(n.Ident) > 1 {
+			return checkField(n.Ident[1:])
+		}
+	case *parse.ChainNode:
+		if err := checkFields(n.Node); err != nil {
+			return err
+		}
+		if len(n.Field) > 0 {
+			return fmt.Errorf("field %q of a string", n.Field[0])
+		}
+	case *parse.IfNode:
+		return checkBranch(&n.BranchNode)
+	case *parse.RangeNode:
+		return checkBranch(&n.BranchNode)
+	case *parse.WithNode:
+		return checkBranch(&n.BranchNode)
+	case *parse.TemplateNode:
+		return checkFields(n.Pipe)
+	}
+	return nil
+}
+
+func checkBranch(b *parse.BranchNode) error {
+	if err := checkFields(b.Pipe); err != nil {
+		return err
+	}
+	if err := checkFields(b.List); err != nil {
+		return err
+	}
+	return checkFields(b.ElseList)
+}
+
+// checkField returns an error if ident is not one CommandData field.
+func checkField(ident []string) error {
+	if _, ok := reflect.TypeFor[CommandData]().FieldByName(ident[0]); !ok {
+		return fmt.Errorf("unknown field %q", ident[0])
+	}
+	if len(ident) > 1 {
+		return fmt.Errorf("field %q of a string", ident[1])
+	}
+	return nil
 }
 
 // ResolveUser sets cfg.User from `gh api user` when the config has no user.

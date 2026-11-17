@@ -167,6 +167,32 @@ func TestCommandLineCommonPrefix(t *testing.T) {
 	}
 }
 
+func TestCommandLineCommonPrefixMultiByte(t *testing.T) {
+	c := &commandLine{names: []string{"sync-é", "sync-ê"}}
+	c.text = []rune("s")
+	c.complete()
+	if got := string(c.text); got != "sync-" {
+		t.Fatalf("text %q", got)
+	}
+}
+
+func TestCommandLineDoubleEnter(t *testing.T) {
+	env := newActionModel(t, openPR())
+	env.press(":")
+	env.typeText("close")
+	// The second enter arrives before the message of the first enter.
+	_, first := env.m.Update(key("enter"))
+	_, second := env.m.Update(key("enter"))
+	drive(env.m, first)
+	drive(env.m, second)
+	if calls := env.gh.Calls(); !slices.Equal(calls, []string{"ClosePR PR_1"}) {
+		t.Fatalf("calls %q", calls)
+	}
+	if env.m.Dialogs() != 0 {
+		t.Fatalf("dialogs %d", env.m.Dialogs())
+	}
+}
+
 func TestCommandLineEsc(t *testing.T) {
 	env := newActionModel(t, openPR())
 	env.press(":")
