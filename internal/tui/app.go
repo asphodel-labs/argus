@@ -422,14 +422,16 @@ func (m *Model) handlePoller(u poller.Update) tea.Cmd {
 	}
 	// A full refresh sets a new RefreshedAt. A load more keeps the old one.
 	full := m.snapshot != nil && !u.Snapshot.RefreshedAt.Equal(m.snapshot.RefreshedAt)
-	reload := false
 	if full {
 		m.list.addMarks(diffMarks(m.snapshot, u.Snapshot, m.list.me))
-		reload = m.detail.dropCache()
 	}
 	m.snapshot = u.Snapshot
 	m.list.setSnapshot(u.Snapshot)
-	if reload {
+	// The new rows can put the cursor on another PR. The pane follows the
+	// cursor before the cache drop, so that the reload goes to the PR that
+	// the pane shows after the refresh.
+	m.followCursor()
+	if full && m.detail.dropCache() {
 		cmds = append(cmds, m.reloadShown())
 	}
 	m.status.Err = nil

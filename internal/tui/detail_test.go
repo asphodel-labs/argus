@@ -630,8 +630,62 @@ func TestDetailShownPRLeavesList(t *testing.T) {
 	if got := detailText(m); got != "acme/api#2  Press enter to load." {
 		t.Fatalf("detail %q", got)
 	}
+	// B had no cached detail, so the refresh sends no call. A is not shown,
+	// so it gets no call.
+	if got := det.calls; len(got) != 1 || got[0] != "A" {
+		t.Fatalf("calls %v after the refresh, want [A]", got)
+	}
 	if !m.list.marks["B"].Activity {
 		t.Fatalf("marks %v, want Activity on B while the cursor is on it", m.list.marks)
+	}
+}
+
+func TestDetailShownPRLeavesListReloadsCursorPR(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	b := testPR("B", "acme/api", 2, "Second", "bob")
+	det := &fakeDetailer{prs: map[string]model.PR{"A": a, "B": b}}
+	m := newPolledModel(t, det, detailSnapshot(a, b))
+
+	// Rows: section, group, A, B. Load B, then load and show A.
+	press(m, "j", "j", "j", "space", "k", "space")
+	if got := det.calls; len(got) != 2 || got[1] != "A" {
+		t.Fatalf("calls %v, want [B A]", got)
+	}
+
+	// A refresh drops A. The cursor lands on B, which had a cached detail,
+	// so the refresh reloads B and not A.
+	poll(m, refreshedSnapshot(time.Minute, b))
+	if id := selectedID(t, m); id != "B" {
+		t.Fatalf("cursor on %s, want B", id)
+	}
+	if got := det.calls; len(got) != 3 || got[2] != "B" {
+		t.Fatalf("calls %v after the refresh, want [B A B]", got)
+	}
+	if got := detailText(m); !strings.Contains(got, "Second") {
+		t.Fatalf("detail does not show B:\n%s", got)
+	}
+}
+
+func TestDetailRefreshCursorOnSectionRow(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	b := testPR("B", "acme/api", 2, "Second", "bob")
+	det := &fakeDetailer{prs: map[string]model.PR{"A": a, "B": b}}
+	m := newPolledModel(t, det, detailSnapshot(a, b))
+
+	// Rows: section, group, A, B. Load A, then move to the section row. The
+	// pane keeps A.
+	press(m, "j", "j", "space", "k", "k")
+
+	// The refresh reloads A, which the pane still shows.
+	poll(m, refreshedSnapshot(time.Minute, a, b))
+	if pr, ok := m.Opened(); !ok || pr.ID != "A" {
+		t.Fatalf("opened %q %v, want A", pr.ID, ok)
+	}
+	if got := det.calls; len(got) != 2 || got[1] != "A" {
+		t.Fatalf("calls %v after the refresh, want [A A]", got)
+	}
+	if got := detailText(m); !strings.Contains(got, "First") {
+		t.Fatalf("detail does not show A:\n%s", got)
 	}
 }
 
