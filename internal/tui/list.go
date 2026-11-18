@@ -181,16 +181,39 @@ func (l *listPane) sectionOrder() []int {
 }
 
 // visiblePRs returns the PRs of the section that the filters keep. The
-// filters do not apply to My PRs.
+// filters do not apply to My PRs. An org section does not show a PR that
+// is in Needs my review or in My PRs.
 func (l *listPane) visiblePRs(sec poller.Section) []model.PR {
 	mine := sec.Scope.Kind == poller.ScopeMine
+	var listed map[string]bool
+	if sec.Scope.Kind == poller.ScopeOrg {
+		listed = l.reviewAndMineIDs()
+	}
 	var prs []model.PR
 	for _, pr := range sec.PRs {
+		if listed[pr.ID] {
+			continue
+		}
 		if mine || l.filters.Match(pr, l.botLogins) {
 			prs = append(prs, pr)
 		}
 	}
 	return prs
+}
+
+// reviewAndMineIDs returns the IDs of the PRs in the Needs my review and
+// the My PRs sections.
+func (l *listPane) reviewAndMineIDs() map[string]bool {
+	ids := map[string]bool{}
+	for _, sec := range l.snapshot.Sections {
+		if sec.Scope.Kind != poller.ScopeNeedsReview && sec.Scope.Kind != poller.ScopeMine {
+			continue
+		}
+		for _, pr := range sec.PRs {
+			ids[pr.ID] = true
+		}
+	}
+	return ids
 }
 
 // groupByRepo groups the PRs by repository. The group with the most

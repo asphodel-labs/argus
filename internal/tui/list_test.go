@@ -585,3 +585,37 @@ func TestListEmptyScopes(t *testing.T) {
 		t.Fatalf("view:\n%s", m.View().Content)
 	}
 }
+
+func TestListOrgHidesReviewAndMinePRs(t *testing.T) {
+	m := newListModel(t)
+	snap := listSnapshot()
+	// R1 is in Needs my review and M2 is in My PRs. The org search finds both.
+	snap.Sections[2].PRs = append(snap.Sections[2].PRs, snap.Sections[0].PRs[0], snap.Sections[1].PRs[1])
+	m.Update(pollerMsg{Snapshot: snap})
+
+	orgKey := sectionKey(scopeAcme)
+	var org []string
+	for _, r := range m.list.rows {
+		if r.kind == rowPR && r.scope == scopeAcme {
+			org = append(org, r.pr.ID)
+		}
+	}
+	if want := []string{"O2", "O3", "O1"}; !slices.Equal(org, want) {
+		t.Errorf("org PRs = %v, want %v", org, want)
+	}
+	for _, id := range []string{"R1", "M2"} {
+		if !slices.ContainsFunc(m.list.rows, func(r listRow) bool { return r.kind == rowPR && r.pr.ID == id }) {
+			t.Errorf("%s is not in the list", id)
+		}
+	}
+	if got := rowText(m)[11]; got != "▾ Org acme (3 of 5)" {
+		t.Errorf("org header = %q", got)
+	}
+	for _, e := range m.list.finderEntries() {
+		if e.section == orgKey {
+			if e.pr.ID == "R1" || e.pr.ID == "M2" {
+				t.Errorf("finder puts %s in the org section", e.pr.ID)
+			}
+		}
+	}
+}

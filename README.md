@@ -8,7 +8,7 @@ It shows the open PRs that concern you and lets you act on them with vim-style k
 The name comes from Argus Panoptes, the giant with a hundred eyes in Greek mythology.
 Hera made him a guardian because some of his eyes were always open. Like him, argus watches all your PRs, and no review escapes it.
 
-- The left pane lists the PRs in four sections: Needs my review, My PRs, one section for each configured org, and Personal.
+- The left pane lists the PRs in four sections: Needs my review, My PRs, one section for each configured org, and Personal. An org section does not show a PR that is in Needs my review or My PRs.
 - The detail pane shows one PR: the title, the status, the CI checks, the description, and the conversation threads.
 - The actions are approve, merge, rerun checks, comment, reply, react, and resolve a thread.
 - `v` opens revdiff for the PR in an agterm overlay. argus posts the annotations as one GitHub review.
