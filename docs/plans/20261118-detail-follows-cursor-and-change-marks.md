@@ -171,9 +171,9 @@
 - [x] run `make lint` (golangci-lint not installed, skipped)
 
 ### Task 7: [Final] Update documentation
-- [ ] update `README.md`: the detail pane follows the cursor, `enter` loads an uncached detail, the cache lives until the next refresh, the mark kinds and colors, and the new `[colors]` names
-- [ ] update `CLAUDE.md` if a new pattern appears
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `README.md`: the detail pane follows the cursor, `enter` loads an uncached detail, the cache lives until the next refresh, the mark kinds and colors, and the new `[colors]` names
+- [x] update `CLAUDE.md` if a new pattern appears
+- [x] move this plan to `docs/plans/completed/` (skipped - the harness moves the plan)
 
 ## Post-Completion
 *Items that need manual action. No checkboxes.*

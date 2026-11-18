@@ -26,6 +26,7 @@ See `README.md` for the features and `docs/plans/` for the design.
 - `internal/commands`: run the custom commands of the config in the clone, in background or overlay mode.
 - `internal/launch`: the Claude session through `agtermctl session new`.
 - `internal/tui`: the Bubble Tea model, the list and detail panes, the dialogs, and the status bar.
+  After each message, `Model.Update` runs `followCursor` and then `syncDetail`. Put a cursor-driven change of the detail pane or the marks there, not in each key handler.
 
 ## Runner pattern
 

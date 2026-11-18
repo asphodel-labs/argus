@@ -9,7 +9,8 @@ The name comes from Argus Panoptes, the giant with a hundred eyes in Greek mytho
 Hera made him a guardian because some of his eyes were always open. Like him, argus watches all your PRs, and no review escapes it.
 
 - The left pane lists the PRs in four sections: Needs my review, My PRs, one section for each configured org, and Personal. An org section does not show a PR that is in Needs my review or My PRs.
-- The detail pane shows one PR: the title, the status, the CI checks, the description, and the conversation threads.
+- The detail pane shows one PR: the title, the status, the CI checks, the description, and the conversation threads. It follows the list cursor.
+- After a refresh, colored marks show the PRs that changed. See [Change marks](#change-marks).
 - The actions are approve, merge, rerun checks, comment, reply, react, and resolve a thread.
 - `v` opens revdiff for the PR in an agterm overlay. argus posts the annotations as one GitHub review.
 - `p` opens a Claude session with `/pr <url>` in a new agterm session.
@@ -112,7 +113,7 @@ run = "gh pr checkout {{.Number}}"
 `refresh_interval` and `min_refresh_gap` use Go duration syntax, for example `90s` or `10m`. The value must be positive.
 A path that starts with `~/` is relative to your home directory.
 
-The color names are `failed`, `changes`, `reply`, `draft`, `conflict`, `pending`, `approved`, `accent`, `error`, and `muted`.
+The color names are `failed`, `changes`, `reply`, `draft`, `conflict`, `pending`, `approved`, `accent`, `error`, `muted`, `mark_new`, `mark_activity`, and `mark_commits`.
 A color value is an ANSI number from 0 to 255 or `#rrggbb`. argus stops with an error for an unknown name or a bad value.
 
 ## PR status
@@ -128,6 +129,25 @@ The list shows one status for each PR. The first rule that matches gives the sta
 | ⊘ | Conflict | The PR has a merge conflict. |
 | ⏳ | Pending review | No other rule matches. |
 | ✓ | Approved | The PR is APPROVED and CI is green. |
+
+## Change marks
+
+A full refresh compares the new data with the data of the previous full refresh.
+A PR row that changed gets colored `•` marks in the four columns at the start of the row.
+The columns are, in order: New, Activity, Commits, and State.
+
+| Mark | Color name | Default | Rule |
+|---|---|---|---|
+| New | `mark_new` | `208` (orange) | The PR is new, and GitHub created it after the previous full refresh. |
+| Activity | `mark_activity` | `33` (blue) | The comment, review, or thread count went up, and the newest author is not you. Also a PR that is new in the list but older than the previous full refresh. |
+| Commits | `mark_commits` | `135` (purple) | The head commit changed. |
+| State | `approved` / `failed` | green / red | The check rollup changed to SUCCESS (green), or to FAILURE or ERROR (red). The review decision changed to APPROVED (green), or to CHANGES_REQUESTED (red). |
+
+If one refresh gives a green and a red state change, the mark is red. A later refresh replaces the state color.
+The marks of a PR add up across refreshes. They stay until the cursor leaves the PR row.
+A folded section or repo group shows one `•` if a hidden PR has a mark.
+A `load more` page adds no marks.
+argus keeps the marks in memory only. Each start of argus begins with no marks.
 
 ## Keys
 
@@ -151,8 +171,8 @@ List pane:
 | `ctrl+d` / `ctrl+u` | Move a half page down / up. |
 | `pgdown` / `pgup` | Move a page down / up. |
 | `]` / `[` | Move to the next / previous section. |
-| `enter` | Open the PR in the detail pane and move the focus to it. |
-| `space` | Open the PR in the detail pane. The focus stays in the list. |
+| `enter` | Load the PR detail if it is not loaded, and move the focus to the detail pane. |
+| `space` | Load the PR detail if it is not loaded. The focus stays in the list. |
 | `za` | Fold the repo group or the section. |
 | `/` | Open the fuzzy finder. A PR number that matches no loaded PR offers a GitHub search. |
 | `a` | Hide the approved PRs. |
@@ -162,8 +182,11 @@ List pane:
 | `m` | Load 20 more PRs in an org or Personal section. |
 
 The filter keys `a`, `d`, `b`, and `u` apply to every section except My PRs.
-The cursor keys only move the cursor. They do not load a PR.
-The list marks the opened PR with `●`.
+The detail pane follows the list cursor. On a section, group, or `load more` row, the pane keeps the last PR.
+The cursor keys do not load a PR. The pane shows a loaded detail at once. For a PR with no loaded detail, the pane shows `owner/repo#n  Press enter to load.`
+`enter` and `space` load the detail. A loaded detail stays until the next full refresh.
+A full refresh drops all loaded details and loads the detail of the shown PR again.
+The list marks the PR in the detail pane with `●`.
 
 The list shows the PRs of a GitHub stack (`gh stack`) together, in stack order.
 The PR closest to the base branch comes first, and `┌`, `├`, and `└` connect the rows of the stack.
@@ -195,8 +218,9 @@ Detail pane:
 | `]` / `[` | Move to the next / previous thread. |
 | `za` | Fold the thread. |
 
-PR actions work in both panes. They act on the opened PR, not on the PR under the cursor.
-With no opened PR, they show "open a PR with enter".
+PR actions work in both panes. They act on the PR in the detail pane. The pane header shows the ref of that PR.
+This PR is the PR under the cursor, or the last PR when the cursor is on a section, group, or `load more` row.
+With no PR in the detail pane, the actions show "move the cursor to a PR".
 
 | Key | Action |
 |---|---|
@@ -221,7 +245,7 @@ With no opened PR, they show "open a PR with enter".
 The mouse also works in the panes:
 
 - A click focuses the pane.
-- In the list, a click on a PR opens it. A click on a section or a repo row folds it. A click on the `load more` row loads more PRs.
+- In the list, a click on a PR moves the cursor to it and loads its detail. A click on a section or a repo row folds it. A click on the `load more` row loads more PRs.
 - In the detail pane, a click on the header of a thread, a comment, or a review folds it.
 - The wheel scrolls the pane under the pointer. In the list, the cursor stays in the view.
 - The mouse does nothing while a dialog or the help is open.
@@ -233,7 +257,7 @@ To select text, hold `shift` while you drag. In iTerm2, hold `option`.
 
 `:` opens the command line in place of the status bar. The line shows the command names that start with the text.
 `tab` completes the name, `enter` runs the command, and `esc` closes the line.
-A command other than `:q` acts on the opened PR. The PR detail must be loaded.
+A command other than `:q` acts on the PR in the detail pane. The PR detail must be loaded.
 
 | Command | Action |
 |---|---|
