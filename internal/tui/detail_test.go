@@ -590,6 +590,51 @@ func TestDetailLoadMoreKeepsCache(t *testing.T) {
 	}
 }
 
+func TestDetailRefreshErrorKeepsState(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	b := testPR("B", "acme/api", 2, "Second", "bob")
+	det := &fakeDetailer{prs: map[string]model.PR{"A": a}}
+	m := newPolledModel(t, det, detailSnapshot(a, b))
+	poll(m, refreshedSnapshot(time.Minute, a, commented(b, "bob")))
+	press(m, "j", "j", "space")
+
+	// A failed refresh keeps the snapshot, the cache, and the marks.
+	_, cmd := m.Update(pollerMsg{Err: errors.New("HTTP 502")})
+	run(m, cmd)
+	if m.snapshot.RefreshedAt != listNow.Add(time.Minute) {
+		t.Fatalf("snapshot RefreshedAt %v, want the last refresh", m.snapshot.RefreshedAt)
+	}
+	if got := detailText(m); !strings.Contains(got, "First") || det.callCount() != 1 {
+		t.Fatalf("calls %d, detail:\n%s", det.callCount(), got)
+	}
+	if !m.list.marks["B"].Activity {
+		t.Fatalf("marks %v, want Activity on B", m.list.marks)
+	}
+}
+
+func TestDetailShownPRLeavesList(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	b := testPR("B", "acme/api", 2, "Second", "bob")
+	det := &fakeDetailer{prs: map[string]model.PR{"A": a, "B": b}}
+	m := newPolledModel(t, det, detailSnapshot(a, b))
+
+	// Rows: section, group, A, B. Load A, then a refresh drops A.
+	press(m, "j", "j", "space")
+	poll(m, refreshedSnapshot(time.Minute, commented(b, "bob")))
+
+	// The cursor keeps its index and lands on B. The pane follows B and
+	// does not show the detail of A.
+	if id := selectedID(t, m); id != "B" {
+		t.Fatalf("cursor on %s, want B", id)
+	}
+	if got := detailText(m); got != "acme/api#2  Press enter to load." {
+		t.Fatalf("detail %q", got)
+	}
+	if !m.list.marks["B"].Activity {
+		t.Fatalf("marks %v, want Activity on B while the cursor is on it", m.list.marks)
+	}
+}
+
 func TestDetailErrorState(t *testing.T) {
 	a := testPR("A", "acme/api", 1, "First", "alice")
 	b := testPR("B", "acme/api", 2, "Second", "bob")

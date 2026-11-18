@@ -165,10 +165,10 @@
 - [x] run `make test`: it must pass before Task 6
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify each item of the Overview
-- [ ] verify the edge cases: the first snapshot, a load more, a refresh with an error, a cursor on a section row, a PR that leaves the list
-- [ ] run the full test suite: `make test` and `go test -race ./...`
-- [ ] run `make lint`
+- [x] verify each item of the Overview
+- [x] verify the edge cases: the first snapshot, a load more, a refresh with an error, a cursor on a section row, a PR that leaves the list
+- [x] run the full test suite: `make test` and `go test -race ./...`
+- [x] run `make lint` (golangci-lint not installed, skipped)
 
 ### Task 7: [Final] Update documentation
 - [ ] update `README.md`: the detail pane follows the cursor, `enter` loads an uncached detail, the cache lives until the next refresh, the mark kinds and colors, and the new `[colors]` names
