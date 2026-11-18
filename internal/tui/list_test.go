@@ -91,7 +91,7 @@ func listSnapshot() *poller.Snapshot {
 
 func newListModel(t *testing.T) *Model {
 	t.Helper()
-	m := New(Options{Poller: newFakePoller(), Styles: testStyles(t), Me: "me", BotLogins: []string{"renovate"}, Now: fixedNow})
+	m := mustNew(t, Options{Poller: newFakePoller(), Styles: testStyles(t), Me: "me", BotLogins: []string{"renovate"}, Now: fixedNow})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m.Update(pollerMsg{Snapshot: listSnapshot()})
 	return m
@@ -562,7 +562,7 @@ func TestAge(t *testing.T) {
 // TestListEmptyScopes checks a snapshot with no orgs and no PRs: the list
 // shows the empty sections, and the keys do not fail.
 func TestListEmptyScopes(t *testing.T) {
-	m := New(Options{Poller: newFakePoller(), Styles: testStyles(t), Me: "me", Now: fixedNow})
+	m := mustNew(t, Options{Poller: newFakePoller(), Styles: testStyles(t), Me: "me", Now: fixedNow})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m.Update(pollerMsg{Snapshot: &poller.Snapshot{RefreshedAt: listNow, Sections: []poller.Section{
 		{Scope: scopeReview}, {Scope: scopeMine}, {Scope: scopePersonal},

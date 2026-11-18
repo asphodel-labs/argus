@@ -23,6 +23,7 @@ See `README.md` for the features and `docs/plans/` for the design.
 - `internal/notify`: send events with `agtermctl notify`, and keep `seen.json`.
 - `internal/state`: the last merge method for each repo.
 - `internal/review`: worktree setup and cleanup, the revdiff overlay, the annotation parser, and the hunk check.
+- `internal/commands`: run the custom commands of the config in the clone, in background or overlay mode.
 - `internal/launch`: the Claude session through `agtermctl session new`.
 - `internal/tui`: the Bubble Tea model, the list and detail panes, the dialogs, and the status bar.
 

@@ -553,3 +553,33 @@ func (c *Client) RemoveAssignees(ctx context.Context, assignableID string, ids [
 	input := map[string]any{"assignableId": assignableID, "assigneeIds": idList(ids)}
 	return c.mutate(ctx, "remove assignees "+assignableID, removeAssigneesMutation, input, nil)
 }
+
+const convertToDraftMutation = `mutation ConvertToDraft($input: ConvertPullRequestToDraftInput!) {
+  convertPullRequestToDraft(input: $input) { pullRequest { id isDraft } }
+}`
+
+// ConvertToDraft converts the PR to a draft.
+func (c *Client) ConvertToDraft(ctx context.Context, prID string) error {
+	input := map[string]any{"pullRequestId": prID}
+	return c.mutate(ctx, "convert to draft "+prID, convertToDraftMutation, input, nil)
+}
+
+const markReadyMutation = `mutation MarkReady($input: MarkPullRequestReadyForReviewInput!) {
+  markPullRequestReadyForReview(input: $input) { pullRequest { id isDraft } }
+}`
+
+// MarkReady marks the draft PR as ready for review.
+func (c *Client) MarkReady(ctx context.Context, prID string) error {
+	input := map[string]any{"pullRequestId": prID}
+	return c.mutate(ctx, "mark ready "+prID, markReadyMutation, input, nil)
+}
+
+const closePRMutation = `mutation ClosePR($input: ClosePullRequestInput!) {
+  closePullRequest(input: $input) { pullRequest { id state } }
+}`
+
+// ClosePR closes the PR without a merge. GitHub can open the PR again.
+func (c *Client) ClosePR(ctx context.Context, prID string) error {
+	input := map[string]any{"pullRequestId": prID}
+	return c.mutate(ctx, "close "+prID, closePRMutation, input, nil)
+}

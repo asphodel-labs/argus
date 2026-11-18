@@ -14,6 +14,7 @@ import (
 	"github.com/asphodel-labs/argus/internal/execx"
 	"github.com/asphodel-labs/argus/internal/gh"
 	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/review"
 )
 
 // GitHub is the part of gh.Client that the PR actions use.
@@ -34,6 +35,9 @@ type GitHub interface {
 	RequestReviews(ctx context.Context, prID string, userIDs, teamIDs, botIDs []string) error
 	AddAssignees(ctx context.Context, assignableID string, ids []string) error
 	RemoveAssignees(ctx context.Context, assignableID string, ids []string) error
+	ConvertToDraft(ctx context.Context, prID string) error
+	MarkReady(ctx context.Context, prID string) error
+	ClosePR(ctx context.Context, prID string) error
 }
 
 // MergeMemory keeps the last merge method for each repository.
@@ -74,7 +78,8 @@ func (m *Model) action(origin actionDialog, prID, desc string, refresh bool, fn 
 	}
 }
 
-// handleActionDone shows the result of an action. On an error the dialog
+// handleActionDone shows the result of an action. A *review.MissingClone
+// error opens the clone prompt. On another error the dialog
 // that started the action stays open with its input. On a success the
 // dialog closes and the detail of the PR loads again. The dialog can be
 // under another dialog, for example the quit confirmation.
@@ -82,6 +87,10 @@ func (m *Model) handleActionDone(msg actionDoneMsg) tea.Cmd {
 	at := -1
 	if msg.origin != nil {
 		at = slices.Index(m.dialogs, Dialog(msg.origin))
+	}
+	var missing *review.MissingClone
+	if errors.As(msg.err, &missing) {
+		return func() tea.Msg { return CloneNeededMsg{Missing: missing} }
 	}
 	if msg.err != nil {
 		if at < 0 {
@@ -138,8 +147,16 @@ func prRef(pr model.PR) string {
 // key.
 func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	s := msg.String()
+	if s == ":" {
+		m.list.pending, m.detail.pending = "", ""
+		return PushDialog(m.newCommandLine()), true
+	}
+	if c, found := m.customByKey(s); found {
+		m.list.pending, m.detail.pending = "", ""
+		return m.runCustom(c), true
+	}
 	switch s {
-	case "A", "M", "U", "R", "@", "f", "F", "c", "r", "+", "x", "o", "v", "p":
+	case "A", "M", "U", "R", "@", "f", "F", "c", "r", "+", "x", "o", "v", "p", "y":
 	default:
 		return nil, false
 	}
@@ -150,6 +167,9 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	pr := m.detail.sel
 	if s == "o" {
 		return m.openBrowser(pr), true
+	}
+	if s == "y" {
+		return m.yank(pr), true
 	}
 	if s == "v" || s == "p" {
 		// The worktree setup needs the head SHA and the base branch of the
@@ -459,4 +479,45 @@ func runOpen(ctx context.Context, r execx.Runner, name, url string) error {
 		return fmt.Errorf("%s exited with code %d: %s", name, code, strings.TrimSpace(stderr))
 	}
 	return nil
+}
+
+// yankDoneMsg carries the result of the pbcopy run of the y key.
+type yankDoneMsg struct {
+	url string
+	err error
+}
+
+// yank copies the PR URL to the clipboard. tea.SetClipboard writes OSC 52.
+// Some terminals block OSC 52, so on macOS yank also runs pbcopy through
+// the runner, off the update loop.
+func (m *Model) yank(pr model.PR) tea.Cmd {
+	url := pr.URL
+	if !m.pbcopy || m.runner == nil {
+		return tea.Batch(tea.SetClipboard(url), m.status.SetMessage("copied "+url))
+	}
+	ctx, r := m.ctx, m.runner
+	return tea.Batch(tea.SetClipboard(url), func() tea.Msg {
+		return yankDoneMsg{url: url, err: runPbcopy(ctx, r, url)}
+	})
+}
+
+// runPbcopy gives url to pbcopy. The URL is an argument of sh, so the
+// runner needs no stdin.
+func runPbcopy(ctx context.Context, r execx.Runner, url string) error {
+	_, stderr, code, err := r.Run(ctx, "sh", "-c", `printf %s "$1" | pbcopy`, "sh", url)
+	if err != nil {
+		return err
+	}
+	if code != 0 {
+		return fmt.Errorf("pbcopy exited with code %d: %s", code, strings.TrimSpace(stderr))
+	}
+	return nil
+}
+
+// handleYankDone shows the result of the pbcopy run.
+func (m *Model) handleYankDone(msg yankDoneMsg) tea.Cmd {
+	if msg.err != nil {
+		return m.status.SetMessage("copy URL failed: " + firstLine(msg.err.Error()))
+	}
+	return m.status.SetMessage("copied " + msg.url)
 }

@@ -217,7 +217,7 @@ func newActionModel(t *testing.T, pr model.PR) *actionEnv {
 		mem:    &fakeMemory{},
 		runner: &fakeRunner{},
 	}
-	env.m = New(Options{
+	env.m = mustNew(t, Options{
 		Detail: env.det, GitHub: env.gh, Merges: env.mem, Runner: env.runner, OpenCommand: "open-url",
 		Styles: testStyles(t), Me: "me", Now: fixedNow,
 	})
@@ -349,7 +349,7 @@ func newActionProgram(t *testing.T, pr model.PR, gh *fakeGitHub, mem *fakeMemory
 	t.Helper()
 	p := newFakePoller()
 	det := &fakeDetailer{prs: map[string]model.PR{pr.ID: pr}}
-	tm := teatest.NewTestModel(t, New(Options{
+	tm := teatest.NewTestModel(t, mustNew(t, Options{
 		Poller: p, Detail: det, GitHub: gh, Merges: mem, Runner: &fakeRunner{},
 		Styles: testStyles(t), Me: "me", Now: fixedNow,
 	}), teatest.WithInitialTermSize(160, 50))
@@ -589,7 +589,7 @@ func TestActionResultAfterDialogClosed(t *testing.T) {
 
 func TestActionNeedsOpenedPRAndDetail(t *testing.T) {
 	env := &actionEnv{gh: &fakeGitHub{}, runner: &fakeRunner{}}
-	env.m = New(Options{GitHub: env.gh, Runner: env.runner, OpenCommand: "open-url", Styles: testStyles(t), Me: "me", Now: fixedNow})
+	env.m = mustNew(t, Options{GitHub: env.gh, Runner: env.runner, OpenCommand: "open-url", Styles: testStyles(t), Me: "me", Now: fixedNow})
 	env.m.list.setSnapshot(detailSnapshot(actionPR()))
 	// The cursor is on the PR, but no PR is open.
 	env.press("j", "j")
@@ -622,7 +622,7 @@ func TestActionKeysUseOpenedPR(t *testing.T) {
 		det:    &fakeDetailer{prs: map[string]model.PR{a.ID: a, b.ID: b}},
 		runner: &fakeRunner{},
 	}
-	env.m = New(Options{
+	env.m = mustNew(t, Options{
 		Detail: env.det, GitHub: env.gh, Runner: env.runner, OpenCommand: "open-url",
 		Styles: testStyles(t), Me: "me", Now: fixedNow,
 	})
@@ -788,7 +788,7 @@ func TestOpenBrowser(t *testing.T) {
 }
 
 func TestActionsWithoutGitHub(t *testing.T) {
-	env := &actionEnv{m: New(Options{Styles: testStyles(t), Me: "me", Now: fixedNow})}
+	env := &actionEnv{m: mustNew(t, Options{Styles: testStyles(t), Me: "me", Now: fixedNow})}
 	env.m.list.setSnapshot(detailSnapshot(actionPR()))
 	env.press("j", "j", "enter", "A")
 	if msg := env.m.Status().Message(); msg != "GitHub actions are not available" {
@@ -882,4 +882,16 @@ func TestUpdateBranchNotBlockedWhenBehind(t *testing.T) {
 	}
 	env.press("esc", "U", "y")
 	wantCalls(t, env.gh.Calls(), "UpdateBranch PR_1 MERGE abc123")
+}
+
+func (f *fakeGitHub) ConvertToDraft(_ context.Context, prID string) error {
+	return f.record("ConvertToDraft", prID)
+}
+
+func (f *fakeGitHub) MarkReady(_ context.Context, prID string) error {
+	return f.record("MarkReady", prID)
+}
+
+func (f *fakeGitHub) ClosePR(_ context.Context, prID string) error {
+	return f.record("ClosePR", prID)
 }

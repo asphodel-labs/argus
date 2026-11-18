@@ -50,6 +50,7 @@ var detailQuery = fmt.Sprintf(`query PRDetail($owner: String!, $repo: String!, $
       createdAt
       updatedAt
       headRefOid
+      headRefName
       baseRefName
       repository { name owner { login } }
       author { __typename login }
@@ -235,6 +236,7 @@ func (c checkContextJSON) check() model.Check {
 type prDetailJSON struct {
 	prSummaryJSON
 	Body             string `json:"body"`
+	HeadRefName      string `json:"headRefName"`
 	MergeStateStatus string `json:"mergeStateStatus"`
 	Commits          struct {
 		Nodes []struct {
@@ -350,6 +352,7 @@ func (c *Client) PRDetail(ctx context.Context, owner, repo string, n int) (model
 	d := r.PullRequest
 	pr := d.pr()
 	pr.Body = d.Body
+	pr.HeadRef = d.HeadRefName
 	pr.MergeStateStatus = model.MergeStateStatus(d.MergeStateStatus)
 	pr.DeleteBranchOnMerge = r.DeleteBranchOnMerge
 	for _, m := range []struct {

@@ -104,7 +104,7 @@ func detailSnapshot(prs ...model.PR) *poller.Snapshot {
 // section row. It has no poller, so the commands run without a channel.
 func newDetailModel(t *testing.T, det Detailer, now func() time.Time, snap *poller.Snapshot) *Model {
 	t.Helper()
-	m := New(Options{Detail: det, Styles: testStyles(t), Me: "me", Now: now})
+	m := mustNew(t, Options{Detail: det, Styles: testStyles(t), Me: "me", Now: now})
 	run(m, m.update(tea.WindowSizeMsg{Width: 160, Height: 80}))
 	m.list.setSnapshot(snap)
 	run(m, m.syncDetail())
@@ -595,7 +595,7 @@ func TestDetailFitsWidth(t *testing.T) {
 
 func TestDetailTeatestFold(t *testing.T) {
 	p := newFakePoller()
-	tm := teatest.NewTestModel(t, New(Options{
+	tm := teatest.NewTestModel(t, mustNew(t, Options{
 		Poller: p, Detail: recordedClient(t, "detail_full.json"), Styles: testStyles(t), Me: "me", Now: fixedNow,
 	}), teatest.WithInitialTermSize(160, 60))
 	p.ch <- poller.Update{Snapshot: detailSnapshot(fullPR())}
