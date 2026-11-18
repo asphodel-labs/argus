@@ -171,7 +171,7 @@ func TestCustomCommandNoAgterm(t *testing.T) {
 func TestCustomCommandCompletion(t *testing.T) {
 	env := newCommandModel(t, []config.Command{customCommand("stack-sync", ""), customCommand("stack-push", "")}, &fakeCommander{})
 	env.press(":")
-	if line := lastLine(env.m); !strings.HasPrefix(line, ":█   draft ready close stack-sync stack-push") {
+	if line := lastLine(env.m); !strings.HasPrefix(line, ":█   draft ready close q stack-sync stack-push") {
 		t.Fatalf("last line %q", line)
 	}
 	env.typeText("st")

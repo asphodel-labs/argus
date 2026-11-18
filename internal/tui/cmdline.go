@@ -33,6 +33,7 @@ func (m *Model) lineCommands() []lineCommand {
 		{name: "draft", run: (*Model).convertToDraft},
 		{name: "ready", run: (*Model).markReady},
 		{name: "close", run: (*Model).closePR},
+		{name: "q", run: (*Model).requestQuit},
 	}
 	for _, c := range m.commands {
 		out = append(out, lineCommand{name: c.Name, run: func(m *Model) tea.Cmd { return m.runCustom(c) }})

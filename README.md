@@ -233,13 +233,14 @@ To select text, hold `shift` while you drag. In iTerm2, hold `option`.
 
 `:` opens the command line in place of the status bar. The line shows the command names that start with the text.
 `tab` completes the name, `enter` runs the command, and `esc` closes the line.
-A command acts on the opened PR. The PR detail must be loaded.
+A command other than `:q` acts on the opened PR. The PR detail must be loaded.
 
 | Command | Action |
 |---|---|
 | `:draft` | Convert the PR to a draft. A draft PR shows "already a draft". |
 | `:ready` | Mark the draft PR ready for review. A PR that is not a draft shows "already ready". |
 | `:close` | Close the PR without a merge. A PR that is not open shows "the PR is not open". |
+| `:q` | Quit argus. If a dialog has unsent text, argus asks before it quits. |
 | `:<name>` | Run the custom command with this name. |
 
 An unknown name shows "unknown command: <name>".
@@ -252,7 +253,7 @@ The command runs a shell template in the local clone of the PR repository.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `name` | required | The name for the command line, `:<name>`. It must be unique, must have no space, and must not be `draft`, `ready`, or `close`. |
+| `name` | required | The name for the command line, `:<name>`. It must be unique, must have no space, and must not be `draft`, `ready`, `close`, or `q`. |
 | `key` | empty | An optional key that runs the command. It must not be a built-in key or the key of another command. The help shows the key under the PR actions. |
 | `mode` | `background` | `background` or `overlay`. |
 | `run` | required | The shell template. |
@@ -275,11 +276,11 @@ argus stops with an error at the start if the template has a syntax error or an 
 The modes:
 
 - `background` runs `sh -c` with the template. The command gets no input, and argus keeps its output only for the status bar.
-- `overlay` runs the template in an agterm overlay, and argus waits until the overlay closes. Use it for a command that needs input. The overlay uses the `PATH` of argus, so `gh` and `git` resolve as in your shell. Outside agterm, an overlay command shows "overlay commands require agterm".
+- `overlay` runs the template in an agterm overlay, and argus waits until the overlay closes. Use it for a command that needs input. After the command exits, the overlay shows the exit code and stays open until you press enter. The overlay uses the `PATH` of argus, so `gh` and `git` resolve as in your shell. Outside agterm, an overlay command shows "overlay commands require agterm".
 
 On success, the status bar shows `<name>: done`. On a non-zero exit, it shows the last line of stderr, else the last line of stdout, else the exit code.
 
-argus finds the clone as in the [review flow](#review-flow). If no clone exists, argus asks before it clones the repo. Run the command again after the clone.
+argus finds the clone as in the [review flow](#review-flow). If a worktree of the clone has the PR head branch checked out, the command runs in that worktree. Git does not check out a branch that another worktree has checked out. If no clone exists, argus asks before it clones the repo. Run the command again after the clone.
 
 For example, this command checks out the stack of a `gh stack` PR and syncs it:
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/asphodel-labs/argus/internal/model"
@@ -240,5 +241,31 @@ func TestCommandLineNeedsLoadedDetail(t *testing.T) {
 	}
 	if len(env.gh.Calls()) != 0 {
 		t.Fatalf("calls %q", env.gh.Calls())
+	}
+}
+
+func TestCommandLineQuit(t *testing.T) {
+	m := mustNew(t, Options{GitHub: &fakeGitHub{}, Styles: testStyles(t), Me: "me", Now: fixedNow})
+	m.list.setSnapshot(detailSnapshot(openPR()))
+	// step sends msg and every message of the returned commands, and
+	// reports if one of them is the quit message.
+	var step func(msg tea.Msg) bool
+	step = func(msg tea.Msg) bool {
+		if _, ok := msg.(tea.QuitMsg); ok {
+			return true
+		}
+		_, cmd := m.Update(msg)
+		return cmd != nil && step(cmd())
+	}
+	for _, k := range []string{":", "q"} {
+		if step(key(k)) {
+			t.Fatalf("%q quit", k)
+		}
+	}
+	if !step(key("enter")) {
+		t.Fatal(":q did not quit")
+	}
+	if m.Dialogs() != 0 {
+		t.Fatalf("dialogs %d, want 0", m.Dialogs())
 	}
 }

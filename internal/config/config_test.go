@@ -245,6 +245,9 @@ run = "false"`, `command "sync": name is not unique`},
 		{"built-in name", `[[commands]]
 name = "draft"
 run = "true"`, `command "draft": name is a built-in command`},
+		{"quit name", `[[commands]]
+name = "q"
+run = "true"`, `command "q": name is a built-in command`},
 		{"bad mode", `[[commands]]
 name = "sync"
 mode = "popup"

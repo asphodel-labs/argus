@@ -12,17 +12,24 @@ import (
 	"github.com/asphodel-labs/argus/internal/review"
 )
 
-// fakeRunner records the command and returns set output.
+// fakeRunner records the command and returns set output. It answers
+// "git worktree list" with worktrees, and records those arguments in git.
 type fakeRunner struct {
-	name   string
-	args   []string
-	stdout string
-	stderr string
-	code   int
-	err    error
+	name      string
+	args      []string
+	stdout    string
+	stderr    string
+	code      int
+	err       error
+	worktrees string
+	git       []string
 }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) (string, string, int, error) {
+	if name == "git" {
+		f.git = args
+		return f.worktrees, "", 0, nil
+	}
 	f.name, f.args = name, args
 	return f.stdout, f.stderr, f.code, f.err
 }
@@ -68,7 +75,8 @@ func TestRunOverlay(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	want := []string{"session", "overlay", "open", "--block", "--target", "s1", "--cwd", "/src/acme/api",
-		"PATH='/opt/homebrew/bin:/usr/bin'; export PATH; cd '/src/acme/api' && gh stack sync"}
+		"PATH='/opt/homebrew/bin:/usr/bin'; export PATH; cd '/src/acme/api' && gh stack sync\n" +
+			"rc=$?\nprintf '\\n%s: exit %d. Press enter to close.' 'sync' \"$rc\"\nread _\nexit \"$rc\""}
 	if f.name != "agtermctl" || !reflect.DeepEqual(f.args, want) {
 		t.Errorf("ran %s %q, want agtermctl %q", f.name, f.args, want)
 	}
@@ -142,5 +150,49 @@ func TestRunOverlayNoAgterm(t *testing.T) {
 	}
 	if f.name != "" {
 		t.Errorf("ran %s, want no command", f.name)
+	}
+}
+
+func TestRunInBranchWorktree(t *testing.T) {
+	f := &fakeRunner{worktrees: "worktree /src/acme/api\nHEAD 1111\nbranch refs/heads/main\n\n" +
+		"worktree /src/acme/api/.worktrees/argus-pr-7\nHEAD 2222\ndetached\n\n" +
+		"worktree /work/feat x\nHEAD 3333\nbranch refs/heads/feat/x\n\n"}
+	r := &Runner{Runner: f, Clones: fakeClones{dir: "/src/acme/api"}}
+	if _, err := r.Run(context.Background(), command(t, config.ModeBackground, "gh stack sync"), testPR); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if want := []string{"-C", "/src/acme/api", "worktree", "list", "--porcelain"}; !reflect.DeepEqual(f.git, want) {
+		t.Errorf("git %q, want %q", f.git, want)
+	}
+	want := []string{"-c", "cd '/work/feat x' && gh stack sync"}
+	if !reflect.DeepEqual(f.args, want) {
+		t.Errorf("ran sh %q, want %q", f.args, want)
+	}
+}
+
+func TestRunBranchPrefixNotMatched(t *testing.T) {
+	f := &fakeRunner{worktrees: "worktree /src/acme/api\nbranch refs/heads/main\n\n" +
+		"worktree /work/other\nbranch refs/heads/feat/x2\n\n"}
+	r := &Runner{Runner: f, Clones: fakeClones{dir: "/src/acme/api"}}
+	if _, err := r.Run(context.Background(), command(t, config.ModeBackground, "true"), testPR); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if want := []string{"-c", "cd '/src/acme/api' && true"}; !reflect.DeepEqual(f.args, want) {
+		t.Errorf("ran sh %q, want %q", f.args, want)
+	}
+}
+
+// gitFailRunner fails the git call.
+type gitFailRunner struct{}
+
+func (gitFailRunner) Run(context.Context, string, ...string) (string, string, int, error) {
+	return "", "fatal: not a git repository\n", 128, nil
+}
+
+func TestRunWorktreeListError(t *testing.T) {
+	r := &Runner{Runner: gitFailRunner{}, Clones: fakeClones{dir: "/src/acme/api"}}
+	_, err := r.Run(context.Background(), command(t, config.ModeBackground, "true"), testPR)
+	if err == nil || err.Error() != "git worktree list: fatal: not a git repository" {
+		t.Errorf("err = %v", err)
 	}
 }

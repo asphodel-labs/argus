@@ -71,7 +71,7 @@ const (
 
 // builtinCommands holds the names of the built-in commands of the command
 // line. A custom command must not use one of these names.
-var builtinCommands = []string{"draft", "ready", "close"}
+var builtinCommands = []string{"draft", "ready", "close", "q"}
 
 // Command is a custom command from a [[commands]] table.
 type Command struct {
