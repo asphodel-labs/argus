@@ -112,8 +112,9 @@ func TestYankNeedsOpenedPR(t *testing.T) {
 	env := &actionEnv{runner: &fakeRunner{}}
 	env.m = mustNew(t, Options{Runner: env.runner, Styles: testStyles(t), Me: "me", Now: fixedNow})
 	env.m.list.setSnapshot(detailSnapshot(actionPR()))
-	env.press("j", "j", "y")
-	if msg := env.m.Status().Message(); msg != "open a PR with enter" {
+	// The cursor is on the section row, so no PR is open.
+	env.press("y")
+	if msg := env.m.Status().Message(); msg != "move the cursor to a PR" {
 		t.Fatalf("message %q", msg)
 	}
 	if len(env.runner.calls) != 0 {

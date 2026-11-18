@@ -591,11 +591,10 @@ func TestActionNeedsOpenedPRAndDetail(t *testing.T) {
 	env := &actionEnv{gh: &fakeGitHub{}, runner: &fakeRunner{}}
 	env.m = mustNew(t, Options{GitHub: env.gh, Runner: env.runner, OpenCommand: "open-url", Styles: testStyles(t), Me: "me", Now: fixedNow})
 	env.m.list.setSnapshot(detailSnapshot(actionPR()))
-	// The cursor is on the PR, but no PR is open.
-	env.press("j", "j")
+	// The cursor is on the section row, so no PR is open.
 	for _, k := range []string{"A", "M", "f", "F", "c", "r", "+", "x", "o"} {
 		env.press(k)
-		if msg := env.m.Status().Message(); msg != "open a PR with enter" {
+		if msg := env.m.Status().Message(); msg != "move the cursor to a PR" {
 			t.Fatalf("%s: message %q", k, msg)
 		}
 	}
@@ -603,8 +602,8 @@ func TestActionNeedsOpenedPRAndDetail(t *testing.T) {
 		t.Fatal("an action key without an opened PR did something")
 	}
 
-	// An opened PR without a loaded detail.
-	env.press("enter", "M")
+	// The cursor on the PR opens it, but the detail is not loaded.
+	env.press("j", "j", "M")
 	if msg := env.m.Status().Message(); msg != "the PR detail is not loaded yet" {
 		t.Fatalf("message %q", msg)
 	}
@@ -613,7 +612,7 @@ func TestActionNeedsOpenedPRAndDetail(t *testing.T) {
 	}
 }
 
-func TestActionKeysUseOpenedPR(t *testing.T) {
+func TestActionKeysUsePRUnderCursor(t *testing.T) {
 	a := actionPR()
 	b := testPR("PR_2", "acme/api", 8, "Other change", "carol")
 	b.URL = "https://github.com/acme/api/pull/8"
@@ -628,19 +627,25 @@ func TestActionKeysUseOpenedPR(t *testing.T) {
 	})
 	drive(env.m, env.m.update(tea.WindowSizeMsg{Width: 160, Height: 60}))
 	env.m.list.setSnapshot(detailSnapshot(a, b))
-	// Rows: section, group, PR_1, PR_2. Open PR_1, then move to PR_2.
+	// Rows: section, group, PR_1, PR_2. Load PR_1, then move to PR_2.
 	env.press("j", "j", "space", "j")
 	if selectedID(t, env.m) != "PR_2" {
 		t.Fatal("setup: the cursor is not on PR_2")
 	}
 	env.press("o")
-	if len(env.runner.calls) != 1 || env.runner.calls[0][1] != a.URL {
-		t.Fatalf("runner calls %q, want the URL of PR_1", env.runner.calls)
+	if len(env.runner.calls) != 1 || env.runner.calls[0][1] != b.URL {
+		t.Fatalf("runner calls %q, want the URL of PR_2", env.runner.calls)
 	}
 	env.press("A")
 	env.typeText("ok")
 	env.send(ctrlS)
-	wantCalls(t, env.gh.Calls(), "Approve PR_1 ok ")
+	wantCalls(t, env.gh.Calls(), "Approve PR_2 ok ")
+
+	// A cursor on the section row keeps PR_2 as the target.
+	env.press("g", "g", "o")
+	if len(env.runner.calls) != 2 || env.runner.calls[1][1] != b.URL {
+		t.Fatalf("runner calls %q, want the URL of PR_2 again", env.runner.calls)
+	}
 }
 
 func TestRerun(t *testing.T) {

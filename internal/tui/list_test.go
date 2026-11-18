@@ -471,7 +471,7 @@ func TestListFoldRepoGroup(t *testing.T) {
 	}
 	// za on the group row opens it.
 	sendKeys(m, "z", "a")
-	if got := rowText(m); got[6] != "▾ acme/api (1)" || !strings.HasPrefix(got[7], "✓  #4") {
+	if got := rowText(m); got[6] != "▾ acme/api (1)" || !strings.Contains(got[7], "✓  #4 My api change") {
 		t.Fatalf("unfolded rows:\n%s", strings.Join(got, "\n"))
 	}
 }
@@ -520,7 +520,7 @@ func TestListScrollKeepsCursorVisible(t *testing.T) {
 		t.Fatalf("offset = %d, want %d", m.list.offset, len(m.list.rows)-5)
 	}
 	view := ansi.Strip(m.list.view(40, m.styles, true))
-	if !strings.Contains(view, "›     ⏳ #1 Dotfiles") {
+	if !strings.Contains(view, "›  ●  ⏳ #1 Dotfiles") {
 		t.Fatalf("cursor row not visible:\n%s", view)
 	}
 	sendKeys(m, "g", "g")

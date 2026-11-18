@@ -285,8 +285,8 @@ func TestDetailReviewsLine(t *testing.T) {
 
 func TestDetailNoSelection(t *testing.T) {
 	m := newDetailModel(t, &fakeDetailer{}, fixedNow, detailSnapshot(fullPR()))
-	press(m, "j", "j")
-	if got := detailText(m); got != "No PR open. Press enter on a PR in the list." {
+	// The cursor is on the section row.
+	if got := detailText(m); got != "No PR open. Move the cursor to a PR in the list." {
 		t.Fatalf("detail = %q, want no selection", got)
 	}
 }
@@ -313,8 +313,8 @@ func TestDetailCacheHit(t *testing.T) {
 	if n := det.callCount(); n != 2 {
 		t.Fatalf("calls = %d, want 2", n)
 	}
-	// Back to A inside the TTL: the cache serves it.
-	clk.now = clk.now.Add(20 * time.Second)
+	// The cache has no time limit: an hour later it still serves A.
+	clk.now = clk.now.Add(time.Hour)
 	press(m, "k", "space")
 	if n := det.callCount(); n != 2 {
 		t.Fatalf("calls after a cache hit = %d, want 2", n)
@@ -322,16 +322,10 @@ func TestDetailCacheHit(t *testing.T) {
 	if got := detailText(m); !strings.Contains(got, "First") {
 		t.Fatalf("detail does not show A:\n%s", got)
 	}
-	// Keys that keep the opened PR send no call.
-	press(m, "l", "j", "k", "h")
+	// Keys that move the focus or the cursor send no call.
+	press(m, "l", "j", "k", "h", "j", "enter")
 	if n := det.callCount(); n != 2 {
-		t.Fatalf("calls after keys that keep the opened PR = %d, want 2", n)
-	}
-	// B was loaded 20 s ago; 11 s more makes it stale.
-	clk.now = clk.now.Add(11 * time.Second)
-	press(m, "j", "enter")
-	if got := det.calls; len(got) != 3 || got[2] != "B" {
-		t.Fatalf("calls = %v, want a new call for B", got)
+		t.Fatalf("calls after keys on cached PRs = %d, want 2", n)
 	}
 }
 
@@ -362,20 +356,83 @@ func TestDetailCursorMoveSendsNoQuery(t *testing.T) {
 	if n := det.callCount(); n != 0 {
 		t.Fatalf("calls after cursor moves = %d, want 0", n)
 	}
-	// The opened PR stays in the detail pane while the cursor moves.
-	press(m, "j", "j", "space", "j")
-	if pr, ok := m.Opened(); !ok || pr.ID != "A" || selectedID(t, m) != "B" {
-		t.Fatalf("opened %q %v, cursor on %s; want A open and the cursor on B", pr.ID, ok, selectedID(t, m))
+	// Rows: section, group, A, B. The detail pane follows the cursor.
+	press(m, "g", "g", "j", "j", "space", "j")
+	if pr, ok := m.Opened(); !ok || pr.ID != "B" || selectedID(t, m) != "B" {
+		t.Fatalf("opened %q %v, cursor on %s; want B open and the cursor on B", pr.ID, ok, selectedID(t, m))
 	}
-	if got := detailText(m); !strings.Contains(got, "First") || det.callCount() != 1 {
+	// B is not cached, so the pane does not show the detail of A.
+	if got := detailText(m); got != "acme/api#2  Press enter to load." || det.callCount() != 1 {
 		t.Fatalf("calls %d, detail:\n%s", det.callCount(), got)
 	}
 	if m.Focus() != FocusList {
-		t.Fatal("enter moved the focus")
+		t.Fatal("space moved the focus")
 	}
 	// The list marks the opened row.
-	if got := rowText(m); !strings.HasPrefix(got[2], "● ") || strings.HasPrefix(got[3], "● ") {
+	if got := rowText(m); strings.HasPrefix(got[2], "● ") || !strings.HasPrefix(got[3], "● ") {
 		t.Fatalf("rows:\n%s", strings.Join(got, "\n"))
+	}
+	// Back on A, the cache serves the detail with no call.
+	press(m, "k")
+	if got := detailText(m); !strings.Contains(got, "First") || det.callCount() != 1 {
+		t.Fatalf("calls %d, detail:\n%s", det.callCount(), got)
+	}
+	// The section and group rows keep the last PR.
+	press(m, "k", "k")
+	if pr, ok := m.Opened(); !ok || pr.ID != "A" || !strings.Contains(detailText(m), "First") {
+		t.Fatalf("opened %q %v on the section row, want A", pr.ID, ok)
+	}
+	if n := det.callCount(); n != 1 {
+		t.Fatalf("calls = %d, want 1", n)
+	}
+}
+
+func TestDetailEnterLoadsUncachedPR(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	det := &fakeDetailer{prs: map[string]model.PR{"A": a}}
+	m := newDetailModel(t, det, fixedNow, detailSnapshot(a))
+	press(m, "j", "j")
+	if got := detailText(m); got != "acme/api#1  Press enter to load." || det.callCount() != 0 {
+		t.Fatalf("calls %d, detail %q", det.callCount(), got)
+	}
+	press(m, "enter")
+	if got := detailText(m); !strings.Contains(got, "First") || det.callCount() != 1 {
+		t.Fatalf("calls %d, detail:\n%s", det.callCount(), got)
+	}
+	// enter on the cached PR sends no call.
+	press(m, "h", "enter", "h", "space")
+	if n := det.callCount(); n != 1 {
+		t.Fatalf("calls = %d, want 1", n)
+	}
+}
+
+func TestDetailMouseAndFinderLoad(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	b := testPR("B", "acme/api", 2, "Second", "bob")
+	det := &fakeDetailer{prs: map[string]model.PR{"A": a, "B": b}}
+	m := newDetailModel(t, det, fixedNow, detailSnapshot(a, b))
+
+	// Rows: section, group, A, B. In a list of two lines the wheel moves
+	// the cursor to A with no call.
+	run(m, m.update(tea.WindowSizeMsg{Width: 160, Height: 5}))
+	wheel(m, 5, 1, tea.MouseWheelDown)
+	if pr, ok := m.Opened(); !ok || pr.ID != "A" || det.callCount() != 0 {
+		t.Fatalf("opened %q %v, calls %d after the wheel; want A and no call", pr.ID, ok, det.callCount())
+	}
+	// A click on the row of A loads A. The top border takes line 0.
+	run(m, m.update(tea.WindowSizeMsg{Width: 160, Height: 80}))
+	click(m, 5, rowIndex(t, m, m.list.rows[2].key)+1)
+	if got := det.calls; len(got) != 1 || got[0] != "A" {
+		t.Fatalf("calls %v after a click, want [A]", got)
+	}
+	// A finder pick of B loads B.
+	_, cmd := m.Update(finderPickMsg{entry: finderEntry{pr: b}})
+	run(m, cmd)
+	if got := det.calls; len(got) != 2 || got[1] != "B" {
+		t.Fatalf("calls %v after a pick, want [A B]", got)
+	}
+	if pr, ok := m.Opened(); !ok || pr.ID != "B" || selectedID(t, m) != "B" {
+		t.Fatalf("opened %q %v, want B under the cursor", pr.ID, ok)
 	}
 }
 
@@ -391,7 +448,7 @@ func TestDetailNewerSummaryReloads(t *testing.T) {
 	if n := det.callCount(); n != 1 {
 		t.Fatalf("calls = %d, want 1", n)
 	}
-	// A newer summary loads the detail again inside the TTL.
+	// A newer summary loads the detail again.
 	newer := a
 	newer.UpdatedAt = listNow.Add(time.Minute)
 	newer.Title = "First, changed"

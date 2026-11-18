@@ -149,7 +149,7 @@ func TestCustomCommandNeedsOpenedPR(t *testing.T) {
 				Styles: testStyles(t), Me: "me", Now: fixedNow})
 			env.m.list.setSnapshot(detailSnapshot(openPR()))
 			c.run(env)
-			if msg := env.m.Status().Message(); msg != "open a PR with enter" {
+			if msg := env.m.Status().Message(); msg != "move the cursor to a PR" {
 				t.Fatalf("message %q", msg)
 			}
 			if cmds, _ := fc.runs(); len(cmds) != 0 {

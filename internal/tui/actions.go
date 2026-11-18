@@ -142,9 +142,11 @@ func prRef(pr model.PR) string {
 	return pr.Repo.FullName() + "#" + strconv.Itoa(pr.Number)
 }
 
-// handleActionKey runs the PR action of the key on the opened PR, not on
-// the PR under the list cursor. ok is false if the key is not an action
-// key.
+// handleActionKey runs the PR action of the key on the opened PR. The
+// detail pane follows the list cursor, so the opened PR is the PR under the
+// cursor, or the last PR when the cursor is on a section, group, or footer
+// row. The pane header shows the ref of that PR. ok is false if the key is
+// not an action key.
 func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	s := msg.String()
 	if s == ":" {
@@ -162,7 +164,7 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	}
 	m.list.pending, m.detail.pending = "", ""
 	if !m.detail.hasSel {
-		return m.status.SetMessage("open a PR with enter"), true
+		return m.status.SetMessage("move the cursor to a PR"), true
 	}
 	pr := m.detail.sel
 	if s == "o" {

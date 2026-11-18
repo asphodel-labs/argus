@@ -155,7 +155,7 @@ func (m *Model) handleCommandLine(msg commandLineMsg) tea.Cmd {
 // command and false.
 func (m *Model) loadedDetail() (model.PR, tea.Cmd, bool) {
 	if !m.detail.hasSel {
-		return model.PR{}, m.status.SetMessage("open a PR with enter"), false
+		return model.PR{}, m.status.SetMessage("move the cursor to a PR"), false
 	}
 	if m.github == nil {
 		return model.PR{}, m.status.SetMessage("GitHub actions are not available"), false
@@ -220,7 +220,7 @@ func (m *Model) closePR() tea.Cmd {
 // text. A missing clone opens the clone prompt (handleActionDone).
 func (m *Model) runCustom(c config.Command) tea.Cmd {
 	if !m.detail.hasSel {
-		return m.status.SetMessage("open a PR with enter")
+		return m.status.SetMessage("move the cursor to a PR")
 	}
 	if m.commander == nil {
 		return m.status.SetMessage("custom commands are not available")

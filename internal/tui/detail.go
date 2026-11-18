@@ -22,10 +22,6 @@ type Detailer interface {
 	PRDetail(ctx context.Context, owner, repo string, n int) (model.PR, error)
 }
 
-// detailTTL is the time that a loaded detail stays in the cache. A new
-// selection of the PR in this time uses the cache and sends no query.
-const detailTTL = 30 * time.Second
-
 // detailLoadedMsg carries the result of one PRDetail call.
 type detailLoadedMsg struct {
 	id  string
@@ -139,8 +135,8 @@ func (d *detailPane) selectPR(pr model.PR) {
 }
 
 // needsFetch reports whether the selected PR needs a PRDetail call. An
-// open (opened true) needs one if the cache has no entry younger than
-// detailTTL. Otherwise the PR needs one only if the summary is newer than
+// open (opened true) needs one if the cache has no entry. This includes a
+// PR whose last call failed. Otherwise the PR needs one only if the summary is newer than
 // the summary of the last call, so that a failed call does not repeat on
 // each message.
 func (d *detailPane) needsFetch(opened bool) bool {
@@ -148,8 +144,7 @@ func (d *detailPane) needsFetch(opened bool) bool {
 	if d.loading[id] {
 		return false
 	}
-	e, cached := d.cache[id]
-	if opened && (!cached || d.now().Sub(e.at) >= detailTTL) {
+	if _, cached := d.cache[id]; opened && !cached {
 		return true
 	}
 	last, fetched := d.fetchedFor[id]
@@ -171,9 +166,8 @@ func (d *detailPane) loaded(msg detailLoadedMsg) {
 }
 
 // openPR shows pr in the detail pane and marks its row in the list. It
-// starts a PRDetail call if the cache has no entry younger than
-// detailTTL. A second open of the shown PR keeps the view and retries a
-// failed call.
+// starts a PRDetail call if the cache has no entry. A second open of the
+// shown PR keeps the view and retries a failed call.
 func (m *Model) openPR(pr model.PR) tea.Cmd {
 	d := &m.detail
 	d.selectPR(pr)
@@ -182,6 +176,27 @@ func (m *Model) openPR(pr model.PR) tea.Cmd {
 		return nil
 	}
 	return m.fetchDetail(pr)
+}
+
+// followCursor shows the PR under the list cursor in the detail pane when
+// the cursor moves to a new PR. It sends no PRDetail call: an uncached PR
+// shows "Press enter to load.". On a section, group, or footer row the
+// pane keeps the last PR.
+func (m *Model) followCursor() {
+	pr, ok := m.list.Selected()
+	id := ""
+	if ok {
+		id = pr.ID
+	}
+	if id == m.cursorID {
+		return
+	}
+	m.cursorID = id
+	if !ok {
+		return
+	}
+	m.detail.selectPR(pr)
+	m.list.opened = pr.ID
 }
 
 // syncDetail gives the opened PR the newest summary from the snapshot. It
@@ -319,7 +334,7 @@ func (d *detailPane) isFolded(key string, def bool) bool {
 func (d *detailPane) view() string {
 	st := d.styles
 	if !d.hasSel {
-		return st.Muted.Render("No PR open. Press enter on a PR in the list.")
+		return st.Muted.Render("No PR open. Move the cursor to a PR in the list.")
 	}
 	d.layout()
 	if _, ok := d.entry(); !ok {
@@ -331,7 +346,10 @@ func (d *detailPane) view() string {
 				st.Muted.Render(ansi.Truncate("Press enter on the PR to retry.", d.width, "…")),
 			}, "\n")
 		}
-		return st.Muted.Render(ansi.Truncate("Loading "+ref+"…", d.width, "…"))
+		if d.loading[d.sel.ID] {
+			return st.Muted.Render(ansi.Truncate("Loading "+ref+"…", d.width, "…"))
+		}
+		return st.Muted.Render(ansi.Truncate(ref+"  Press enter to load.", d.width, "…"))
 	}
 	end := min(d.offset+d.height, len(d.lines))
 	out := make([]string, 0, end-d.offset)

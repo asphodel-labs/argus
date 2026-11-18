@@ -95,17 +95,17 @@
 - Modify: `internal/tui/detail_test.go`
 - Modify: `internal/tui/list_test.go`
 
-- [ ] add `followCursor` in `internal/tui/detail.go`: on a new PR under the cursor, call `selectPR` and set `list.opened`, with no fetch
-- [ ] call `followCursor` in `Model.Update` before `syncDetail`
-- [ ] change `view` for an uncached PR with no running call and no error: show "<ref>  Press enter to load."
-- [ ] remove `detailTTL`: `needsFetch(true)` fetches only an uncached PR; keep the retry of a failed call
-- [ ] write tests: a cursor move to a cached PR shows its detail; a cursor move to an uncached PR shows the empty text and sends no `PRDetail` call
-- [ ] write tests: `enter` on an uncached PR fetches it; `enter` on a cached PR sends no call; a cursor move to a section row keeps the last PR
-- [ ] write tests: a mouse click and a finder pick select the PR and send one `PRDetail` call for an uncached PR; the mouse wheel sends no call
-- [ ] update the doc comment of `handleActionKey` in `internal/tui/actions.go` and the message "open a PR with enter" for the new action target
-- [ ] write a test: `A` after a cursor move acts on the PR under the cursor
-- [ ] update the existing tests that depend on `detailTTL` (`TestDetailCacheHit` and `TestDetailNewerSummaryReloads` in `internal/tui/detail_test.go`)
-- [ ] run `make test`: it must pass before Task 2
+- [x] add `followCursor` in `internal/tui/detail.go`: on a new PR under the cursor, call `selectPR` and set `list.opened`, with no fetch
+- [x] call `followCursor` in `Model.Update` before `syncDetail`
+- [x] change `view` for an uncached PR with no running call and no error: show "<ref>  Press enter to load."
+- [x] remove `detailTTL`: `needsFetch(true)` fetches only an uncached PR; keep the retry of a failed call
+- [x] write tests: a cursor move to a cached PR shows its detail; a cursor move to an uncached PR shows the empty text and sends no `PRDetail` call
+- [x] write tests: `enter` on an uncached PR fetches it; `enter` on a cached PR sends no call; a cursor move to a section row keeps the last PR
+- [x] write tests: a mouse click and a finder pick select the PR and send one `PRDetail` call for an uncached PR; the mouse wheel sends no call
+- [x] update the doc comment of `handleActionKey` in `internal/tui/actions.go` and the message "open a PR with enter" for the new action target
+- [x] write a test: `A` after a cursor move acts on the PR under the cursor
+- [x] update the existing tests that depend on `detailTTL` (`TestDetailCacheHit` and `TestDetailNewerSummaryReloads` in `internal/tui/detail_test.go`)
+- [x] run `make test`: it must pass before Task 2
 
 ### Task 2: Drop the detail cache on a full refresh
 

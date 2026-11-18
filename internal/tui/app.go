@@ -156,6 +156,9 @@ type Model struct {
 	snapshot      *poller.Snapshot
 	list          listPane
 	detail        detailPane
+	// cursorID is the ID of the PR under the list cursor at the last
+	// followCursor step, or "" for a row that is not a PR row.
+	cursorID string
 
 	// notifying is true while a Notifier.Process call runs. The calls run
 	// one at a time and in order. pendingNotify is the newest snapshot that
@@ -268,10 +271,12 @@ func (m *Model) Init() tea.Cmd {
 	return waitForUpdate(m.poller.Updates())
 }
 
-// Update handles one message. After each message the opened PR gets its
-// newest summary from the snapshot.
+// Update handles one message. After each message the detail pane follows
+// the list cursor, and the opened PR gets its newest summary from the
+// snapshot.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmd := m.update(msg)
+	m.followCursor()
 	if sync := m.syncDetail(); sync != nil {
 		cmd = tea.Batch(cmd, sync)
 	}

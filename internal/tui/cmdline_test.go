@@ -224,7 +224,7 @@ func TestCommandLineNeedsOpenedPR(t *testing.T) {
 	env.m = mustNew(t, Options{GitHub: env.gh, Styles: testStyles(t), Me: "me", Now: fixedNow})
 	env.m.list.setSnapshot(detailSnapshot(openPR()))
 	env.runLine("close")
-	if msg := env.m.Status().Message(); msg != "open a PR with enter" {
+	if msg := env.m.Status().Message(); msg != "move the cursor to a PR" {
 		t.Fatalf("message %q", msg)
 	}
 	if len(env.gh.Calls()) != 0 {
