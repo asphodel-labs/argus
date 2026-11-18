@@ -424,6 +424,7 @@ func (m *Model) handlePoller(u poller.Update) tea.Cmd {
 	full := m.snapshot != nil && !u.Snapshot.RefreshedAt.Equal(m.snapshot.RefreshedAt)
 	reload := false
 	if full {
+		m.list.addMarks(diffMarks(m.snapshot, u.Snapshot, m.list.me))
 		reload = m.detail.dropCache()
 	}
 	m.snapshot = u.Snapshot

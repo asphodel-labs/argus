@@ -181,7 +181,8 @@ func (m *Model) openPR(pr model.PR) tea.Cmd {
 // followCursor shows the PR under the list cursor in the detail pane when
 // the cursor moves to a new PR. It sends no PRDetail call: an uncached PR
 // shows "Press enter to load.". On a section, group, or footer row the
-// pane keeps the last PR.
+// pane keeps the last PR. When the cursor leaves a PR row, the marks of
+// that PR clear.
 func (m *Model) followCursor() {
 	pr, ok := m.list.Selected()
 	id := ""
@@ -190,6 +191,9 @@ func (m *Model) followCursor() {
 	}
 	if id == m.cursorID {
 		return
+	}
+	if m.cursorID != "" {
+		delete(m.list.marks, m.cursorID)
 	}
 	m.cursorID = id
 	if !ok {

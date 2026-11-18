@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -617,5 +618,112 @@ func TestListOrgHidesReviewAndMinePRs(t *testing.T) {
 				t.Errorf("finder puts %s in the org section", e.pr.ID)
 			}
 		}
+	}
+}
+
+// commented returns a copy of p with one more comment by the author.
+func commented(p model.PR, author string) model.PR {
+	p.CommentCount++
+	p.NewestAuthor = model.Actor{Login: author}
+	return p
+}
+
+func TestListMarksAccumulate(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	a.HeadSHA = "aaa"
+	b := testPR("B", "acme/api", 2, "Second", "bob")
+	m := newPolledModel(t, nil, detailSnapshot(a, b))
+	if len(m.list.marks) != 0 {
+		t.Fatalf("marks %v after the first snapshot, want none", m.list.marks)
+	}
+
+	// The cursor stays on the section row, so no mark clears.
+	a1 := commented(a, "alice")
+	poll(m, refreshedSnapshot(time.Minute, a1, b))
+	a2 := a1
+	a2.HeadSHA = "bbb"
+	poll(m, refreshedSnapshot(2*time.Minute, a2, b))
+	want := map[string]markSet{"A": {Activity: true, Commits: true}}
+	if !maps.Equal(m.list.marks, want) {
+		t.Fatalf("marks %v, want %v", m.list.marks, want)
+	}
+
+	// A load more keeps RefreshedAt and adds no marks.
+	b1 := commented(b, "bob")
+	poll(m, refreshedSnapshot(2*time.Minute, a2, b1))
+	if !maps.Equal(m.list.marks, want) {
+		t.Fatalf("marks %v after a load more, want %v", m.list.marks, want)
+	}
+}
+
+func TestListMarksClearWhenCursorLeaves(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	b := testPR("B", "acme/api", 2, "Second", "bob")
+	m := newPolledModel(t, nil, detailSnapshot(a, b))
+
+	// Rows: section, group, A, B. Put the cursor on A.
+	press(m, "j", "j")
+	if id := selectedID(t, m); id != "A" {
+		t.Fatalf("cursor on %s, want A", id)
+	}
+	poll(m, refreshedSnapshot(time.Minute, commented(a, "alice"), commented(b, "bob")))
+	if id := selectedID(t, m); id != "A" {
+		t.Fatalf("cursor on %s after the refresh, want A", id)
+	}
+	if !m.list.marks["A"].Activity || !m.list.marks["B"].Activity {
+		t.Fatalf("marks %v, want Activity on A and B", m.list.marks)
+	}
+
+	// A key that keeps the cursor on A keeps the marks of A.
+	press(m, "space")
+	if !m.list.marks["A"].Activity {
+		t.Fatalf("marks %v, want Activity on A while the cursor is on it", m.list.marks)
+	}
+
+	// The cursor leaves A: the marks of A clear, the marks of B stay.
+	press(m, "j")
+	if _, ok := m.list.marks["A"]; ok {
+		t.Fatalf("marks %v, want no marks on A", m.list.marks)
+	}
+	if !m.list.marks["B"].Activity {
+		t.Fatalf("marks %v, want Activity on B", m.list.marks)
+	}
+
+	// The cursor leaves B for a section row: the marks of B clear.
+	press(m, "g", "g")
+	if len(m.list.marks) != 0 {
+		t.Fatalf("marks %v, want none", m.list.marks)
+	}
+}
+
+func TestListMarkClearsInAllSections(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	two := func(at time.Time, p model.PR) *poller.Snapshot {
+		return &poller.Snapshot{RefreshedAt: at, Sections: []poller.Section{
+			{Scope: scopeReview, Total: 1, PRs: []model.PR{p}},
+			{Scope: scopeMine, Total: 1, PRs: []model.PR{p}},
+		}}
+	}
+	m := newPolledModel(t, nil, two(listNow, a))
+	poll(m, two(listNow.Add(time.Minute), commented(a, "alice")))
+	if !m.list.marks["A"].Activity {
+		t.Fatalf("marks %v, want Activity on A", m.list.marks)
+	}
+
+	// Rows: section, group, A, section, group, A. The cursor visits the
+	// first row of A and leaves it.
+	press(m, "j", "j", "j")
+	if _, ok := m.list.Selected(); ok {
+		t.Fatalf("cursor %d is on a PR row, want the second section row", m.list.cursor)
+	}
+	if _, ok := m.list.marks["A"]; ok {
+		t.Fatalf("marks %v, want no marks on A", m.list.marks)
+	}
+	press(m, "j", "j")
+	if id := selectedID(t, m); id != "A" {
+		t.Fatalf("cursor on %s, want A in the second section", id)
+	}
+	if _, ok := m.list.marks["A"]; ok {
+		t.Fatalf("marks %v, want no marks on A in the second section", m.list.marks)
 	}
 }

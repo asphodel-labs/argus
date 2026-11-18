@@ -76,13 +76,24 @@ type listPane struct {
 	// opened is the ID of the PR that the detail pane shows. The list
 	// marks its row.
 	opened string
+
+	// marks holds the change marks of each PR ID. A full refresh adds
+	// marks. The marks of a PR clear when the cursor leaves its row.
+	marks map[string]markSet
 }
 
 func newListPane(me string, botLogins []string, now func() time.Time) listPane {
 	if now == nil {
 		now = time.Now
 	}
-	return listPane{me: me, botLogins: botLogins, now: now, folded: map[string]bool{}, height: 1}
+	return listPane{me: me, botLogins: botLogins, now: now, folded: map[string]bool{}, marks: map[string]markSet{}, height: 1}
+}
+
+// addMarks merges the new marks into the marks of the list.
+func (l *listPane) addMarks(marks map[string]markSet) {
+	for id, mk := range marks {
+		l.marks[id] = l.marks[id].merge(mk)
+	}
 }
 
 // Selected returns the PR under the cursor, or false if the cursor is not

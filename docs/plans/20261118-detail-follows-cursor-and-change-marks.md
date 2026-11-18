@@ -142,12 +142,12 @@
 - Modify: `internal/tui/detail.go`
 - Modify: `internal/tui/list_test.go`
 
-- [ ] add `marks map[string]markSet` to `listPane`
-- [ ] in `handlePoller`, on a full refresh with a previous snapshot, merge `diffMarks` into `list.marks`
-- [ ] in `followCursor`, clear the marks of the last PR when the cursor leaves it
-- [ ] write tests: marks accumulate across two refreshes; a load more adds no marks; the marks of a PR stay while the cursor is on it and clear when the cursor leaves
-- [ ] write a test: a mark on a PR in two sections clears in both sections
-- [ ] run `make test`: it must pass before Task 5
+- [x] add `marks map[string]markSet` to `listPane`
+- [x] in `handlePoller`, on a full refresh with a previous snapshot, merge `diffMarks` into `list.marks`
+- [x] in `followCursor`, clear the marks of the last PR when the cursor leaves it
+- [x] write tests: marks accumulate across two refreshes; a load more adds no marks; the marks of a PR stay while the cursor is on it and clear when the cursor leaves
+- [x] write a test: a mark on a PR in two sections clears in both sections
+- [x] run `make test`: it must pass before Task 5
 
 ### Task 5: Show the marks in the rows
 
