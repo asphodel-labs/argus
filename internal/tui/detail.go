@@ -199,6 +199,37 @@ func (m *Model) followCursor() {
 	m.list.opened = pr.ID
 }
 
+// dropCache clears the cached details, the errors, and the summaries of the
+// last calls. It keeps the running calls, so that their results fill the
+// cache. It reports whether the shown PR had a cached detail and no running
+// call.
+func (d *detailPane) dropCache() bool {
+	reload := false
+	if d.hasSel {
+		_, cached := d.cache[d.sel.ID]
+		reload = cached && !d.loading[d.sel.ID]
+	}
+	clear(d.cache)
+	clear(d.errs)
+	clear(d.fetchedFor)
+	d.dirty = true
+	return reload
+}
+
+// reloadShown starts a PRDetail call for the shown PR with its summary from
+// the snapshot. A PR that left the snapshot keeps its last summary.
+func (m *Model) reloadShown() tea.Cmd {
+	if m.detailer == nil || !m.detail.hasSel {
+		return nil
+	}
+	pr, ok := m.list.findPR(m.detail.sel.ID)
+	if !ok {
+		pr = m.detail.sel
+	}
+	m.detail.sel = pr
+	return m.fetchDetail(pr)
+}
+
 // syncDetail gives the opened PR the newest summary from the snapshot. It
 // starts a PRDetail call if the summary is newer than the summary of the
 // last call. A PR that left the snapshot keeps its last summary.

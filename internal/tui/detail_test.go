@@ -463,6 +463,133 @@ func TestDetailNewerSummaryReloads(t *testing.T) {
 	}
 }
 
+// closedPoller has a closed update channel, so that run does not wait for
+// the next update.
+type closedPoller struct{ ch chan poller.Update }
+
+func newClosedPoller() *closedPoller {
+	ch := make(chan poller.Update)
+	close(ch)
+	return &closedPoller{ch: ch}
+}
+
+func (p *closedPoller) Updates() <-chan poller.Update { return p.ch }
+func (p *closedPoller) RefreshNow()                   {}
+func (p *closedPoller) LoadMore(poller.Scope)         {}
+
+// newPolledModel returns a model that gets the first snapshot from the
+// poller, with the cursor on the section row.
+func newPolledModel(t *testing.T, det Detailer, snap *poller.Snapshot) *Model {
+	t.Helper()
+	m := mustNew(t, Options{Detail: det, Poller: newClosedPoller(), Styles: testStyles(t), Me: "me", Now: fixedNow})
+	run(m, m.update(tea.WindowSizeMsg{Width: 160, Height: 80}))
+	poll(m, snap)
+	return m
+}
+
+// poll gives the snapshot to the model as a poller update.
+func poll(m *Model, snap *poller.Snapshot) {
+	_, cmd := m.Update(pollerMsg{Snapshot: snap})
+	run(m, cmd)
+}
+
+// refreshedSnapshot is detailSnapshot with a later RefreshedAt.
+func refreshedSnapshot(d time.Duration, prs ...model.PR) *poller.Snapshot {
+	s := detailSnapshot(prs...)
+	s.RefreshedAt = listNow.Add(d)
+	return s
+}
+
+func TestDetailFirstSnapshotFetchesNothing(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	det := &fakeDetailer{prs: map[string]model.PR{"A": a}}
+	m := newPolledModel(t, det, detailSnapshot(a))
+	press(m, "j", "j")
+	if n := det.callCount(); n != 0 {
+		t.Fatalf("calls = %d, want 0", n)
+	}
+}
+
+func TestDetailFullRefreshDropsCache(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	b := testPR("B", "acme/api", 2, "Second", "bob")
+	det := &fakeDetailer{prs: map[string]model.PR{"A": a, "B": b}}
+	m := newPolledModel(t, det, detailSnapshot(a, b))
+
+	// Rows: section, group, A, B. Load A and B, and show B.
+	press(m, "j", "j", "space", "j", "space")
+	if n := det.callCount(); n != 2 {
+		t.Fatalf("calls = %d, want 2", n)
+	}
+
+	// A full refresh with the same summaries loads only the shown PR.
+	poll(m, refreshedSnapshot(time.Minute, a, b))
+	if got := det.calls; len(got) != 3 || got[2] != "B" {
+		t.Fatalf("calls %v after a refresh, want [A B B]", got)
+	}
+
+	// A full refresh with a newer summary of B also sends one call.
+	newer := b
+	newer.UpdatedAt = listNow.Add(2 * time.Minute)
+	newer.Title = "Second, changed"
+	det.prs["B"] = newer
+	poll(m, refreshedSnapshot(2*time.Minute, a, newer))
+	if got := det.calls; len(got) != 4 || got[3] != "B" {
+		t.Fatalf("calls %v after a refresh with a newer summary, want [A B B B]", got)
+	}
+	if got := detailText(m); !strings.Contains(got, "Second, changed") {
+		t.Fatalf("detail does not show the new title:\n%s", got)
+	}
+
+	// The cache of A is gone. The newer B sorts first, so A is below it.
+	press(m, "j")
+	if id := selectedID(t, m); id != "A" {
+		t.Fatalf("cursor on %s, want A", id)
+	}
+	if got := detailText(m); got != "acme/api#1  Press enter to load." || det.callCount() != 4 {
+		t.Fatalf("calls %d, detail %q", det.callCount(), got)
+	}
+}
+
+func TestDetailRefreshDuringCall(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	det := &fakeDetailer{prs: map[string]model.PR{"A": a}}
+	m := newPolledModel(t, det, detailSnapshot(a))
+
+	// Press enter on A and keep the call running.
+	press(m, "j", "j")
+	_, call := m.Update(key("enter"))
+	if call == nil {
+		t.Fatal("enter started no call")
+	}
+	poll(m, refreshedSnapshot(time.Minute, a))
+	if got := detailText(m); got != "Loading acme/api#1…" || det.callCount() != 0 {
+		t.Fatalf("calls %d, detail %q during the call", det.callCount(), got)
+	}
+	run(m, call)
+	if got := detailText(m); !strings.Contains(got, "First") || det.callCount() != 1 {
+		t.Fatalf("calls %d, detail:\n%s", det.callCount(), got)
+	}
+}
+
+func TestDetailLoadMoreKeepsCache(t *testing.T) {
+	a := testPR("A", "acme/api", 1, "First", "alice")
+	b := testPR("B", "acme/api", 2, "Second", "bob")
+	det := &fakeDetailer{prs: map[string]model.PR{"A": a, "B": b}}
+	m := newPolledModel(t, det, detailSnapshot(a))
+	press(m, "j", "j", "space")
+
+	// A load more keeps RefreshedAt and adds B.
+	poll(m, detailSnapshot(a, b))
+	if n := det.callCount(); n != 1 {
+		t.Fatalf("calls = %d, want 1", n)
+	}
+	press(m, "j", "k")
+	if got := detailText(m); !strings.Contains(got, "First") || det.callCount() != 1 {
+		t.Fatalf("calls %d, detail:\n%s", det.callCount(), got)
+	}
+}
+
 func TestDetailErrorState(t *testing.T) {
 	a := testPR("A", "acme/api", 1, "First", "alice")
 	b := testPR("B", "acme/api", 2, "Second", "bob")

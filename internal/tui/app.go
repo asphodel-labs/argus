@@ -420,8 +420,17 @@ func (m *Model) handlePoller(u poller.Update) tea.Cmd {
 	if u.Snapshot == nil {
 		return tea.Batch(cmds...)
 	}
+	// A full refresh sets a new RefreshedAt. A load more keeps the old one.
+	full := m.snapshot != nil && !u.Snapshot.RefreshedAt.Equal(m.snapshot.RefreshedAt)
+	reload := false
+	if full {
+		reload = m.detail.dropCache()
+	}
 	m.snapshot = u.Snapshot
 	m.list.setSnapshot(u.Snapshot)
+	if reload {
+		cmds = append(cmds, m.reloadShown())
+	}
 	m.status.Err = nil
 	m.status.LastRefresh = u.Snapshot.RefreshedAt
 	m.status.PausedUntil = u.Snapshot.PausedUntil

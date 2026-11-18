@@ -114,13 +114,13 @@
 - Modify: `internal/tui/detail.go`
 - Modify: `internal/tui/detail_test.go`
 
-- [ ] in `handlePoller`, detect a full refresh: the new `RefreshedAt` differs from the stored one
-- [ ] on a full refresh, clear `cache`, `errs`, and `fetchedFor`, but not `loading`
-- [ ] after `setSnapshot`, fetch the shown PR again with its new summary from `m.list.findPR`, if it had a cached detail
-- [ ] write tests: a full refresh drops the cache of other PRs and sends exactly one `PRDetail` call for the shown PR, also when its `UpdatedAt` is newer
-- [ ] write tests: `enter` on an uncached PR, then a refresh while the call runs: the result lands and the pane shows the detail
-- [ ] write tests: a load more snapshot keeps the cache; the first snapshot fetches nothing
-- [ ] run `make test`: it must pass before Task 3
+- [x] in `handlePoller`, detect a full refresh: the new `RefreshedAt` differs from the stored one
+- [x] on a full refresh, clear `cache`, `errs`, and `fetchedFor`, but not `loading`
+- [x] after `setSnapshot`, fetch the shown PR again with its new summary from `m.list.findPR`, if it had a cached detail
+- [x] write tests: a full refresh drops the cache of other PRs and sends exactly one `PRDetail` call for the shown PR, also when its `UpdatedAt` is newer
+- [x] write tests: `enter` on an uncached PR, then a refresh while the call runs: the result lands and the pane shows the detail
+- [x] write tests: a load more snapshot keeps the cache; the first snapshot fetches nothing
+- [x] run `make test`: it must pass before Task 3
 
 ### Task 3: Compute the change marks
 
