@@ -157,12 +157,12 @@
 - Modify: `internal/tui/list_test.go`
 - Modify: `internal/tui/statusbar_test.go` (it has the `NewStyles` override tests)
 
-- [ ] add the colors `mark_new`, `mark_activity`, and `mark_commits` to `defaultColors`, and their styles to `Styles`
-- [ ] in `renderPR`, replace the two leading spaces with the mark field of four columns
-- [ ] in `renderRow`, add one dot to a folded section or group row if a hidden PR has a mark
-- [ ] update the expected row text in the existing list tests for the wider field
-- [ ] write tests: each mark kind renders `•` in its column; a row with no marks keeps the alignment; a folded section shows the dot; a color override from `[colors]` applies to a mark
-- [ ] run `make test`: it must pass before Task 6
+- [x] add the colors `mark_new`, `mark_activity`, and `mark_commits` to `defaultColors`, and their styles to `Styles`
+- [x] in `renderPR`, replace the two leading spaces with the mark field of four columns
+- [x] in `renderRow`, add one dot to a folded section or group row if a hidden PR has a mark
+- [x] update the expected row text in the existing list tests for the wider field
+- [x] write tests: each mark kind renders `•` in its column; a row with no marks keeps the alignment; a folded section shows the dot; a color override from `[colors]` applies to a mark
+- [x] run `make test`: it must pass before Task 6
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify each item of the Overview

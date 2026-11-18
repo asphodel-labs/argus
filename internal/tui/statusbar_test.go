@@ -116,6 +116,29 @@ func TestNewStyles(t *testing.T) {
 	}
 }
 
+func TestNewStylesMarkColors(t *testing.T) {
+	st, err := NewStyles(map[string]string{"mark_new": "#ff8800", "approved": "10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name  string
+		style lipgloss.Style
+		want  string
+	}{
+		{"mark_new override", st.MarkNew, "#ff8800"},
+		{"mark_activity default", st.MarkActivity, "33"},
+		{"mark_commits default", st.MarkCommits, "135"},
+		{"good state uses approved", st.MarkGood, "10"},
+		{"bad state uses failed", st.MarkBad, "1"},
+	}
+	for _, tt := range tests {
+		if got := tt.style.GetForeground(); got != lipgloss.Color(tt.want) {
+			t.Errorf("%s: color = %v, want %s", tt.name, got, tt.want)
+		}
+	}
+}
+
 func TestNewStylesErrors(t *testing.T) {
 	tests := map[string]map[string]string{
 		"unknown name": {"aproved": "2"},

@@ -321,7 +321,7 @@ func TestListLoadMore(t *testing.T) {
 	org.PRs = append(org.PRs, testPR("O4", "acme/api", 24, "Loaded later", "erin"))
 	p.ch <- poller.Update{Snapshot: snap}
 	// The renderer redraws only the changed cells, so wait for the new row.
-	waitForText(t, tm, "Loaded later")
+	waitForText(t, tm, "#24 Loaded")
 	tm.Send(key("q"))
 	m := finalModel(t, tm)
 	if got := rowText(m); !slices.Contains(got, "… 11 more  [m] load more") {
@@ -521,7 +521,7 @@ func TestListScrollKeepsCursorVisible(t *testing.T) {
 		t.Fatalf("offset = %d, want %d", m.list.offset, len(m.list.rows)-5)
 	}
 	view := ansi.Strip(m.list.view(40, m.styles, true))
-	if !strings.Contains(view, "›  ●  ⏳ #1 Dotfiles") {
+	if !strings.Contains(view, "›    ●  ⏳ #1 Dotfiles") {
 		t.Fatalf("cursor row not visible:\n%s", view)
 	}
 	sendKeys(m, "g", "g")
@@ -725,5 +725,89 @@ func TestListMarkClearsInAllSections(t *testing.T) {
 	}
 	if _, ok := m.list.marks["A"]; ok {
 		t.Fatalf("marks %v, want no marks on A in the second section", m.list.marks)
+	}
+}
+
+// prRow returns the PR row of the ID in the first section that has it.
+func prRow(t *testing.T, m *Model, id string) listRow {
+	t.Helper()
+	i := slices.IndexFunc(m.list.rows, func(r listRow) bool { return r.kind == rowPR && r.pr.ID == id })
+	if i < 0 {
+		t.Fatalf("no row for PR %s", id)
+	}
+	return m.list.rows[i]
+}
+
+func TestListMarkColumns(t *testing.T) {
+	st := testStyles(t)
+	dot := "•"
+	tests := []struct {
+		name  string
+		mk    markSet
+		field string
+		style lipgloss.Style
+	}{
+		{"new", markSet{New: true}, "•   ", st.MarkNew},
+		{"activity", markSet{Activity: true}, " •  ", st.MarkActivity},
+		{"commits", markSet{Commits: true}, "  • ", st.MarkCommits},
+		{"state good", markSet{State: stateGood}, "   •", st.MarkGood},
+		{"state bad", markSet{State: stateBad}, "   •", st.MarkBad},
+		{"all", markSet{New: true, Activity: true, Commits: true, State: stateBad}, "••••", st.MarkBad},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newListModel(t)
+			m.list.marks = map[string]markSet{"R1": tt.mk}
+			line := m.list.renderPR(prRow(t, m, "R1"), 120, m.styles)
+			if got := ansi.Strip(line); !strings.HasPrefix(got, tt.field+"   ⏳ #11 Fix login") {
+				t.Fatalf("row = %q, want the mark field %q", got, tt.field)
+			}
+			if !strings.Contains(line, tt.style.Render(dot)) {
+				t.Fatalf("row %q has no dot in the mark color", line)
+			}
+		})
+	}
+}
+
+func TestListUnmarkedRowKeepsAlignment(t *testing.T) {
+	m := newListModel(t)
+	m.list.marks = map[string]markSet{"R1": {New: true, Activity: true, Commits: true, State: stateGood}}
+	marked := ansi.Strip(m.list.renderPR(prRow(t, m, "R1"), 120, m.styles))
+	plain := ansi.Strip(m.list.renderPR(prRow(t, m, "R2"), 120, m.styles))
+	if !strings.HasPrefix(plain, "       ⏳ #12 Bump deps") {
+		t.Fatalf("unmarked row = %q", plain)
+	}
+	if a, b := strings.Index(marked, "⏳"), strings.Index(plain, "⏳"); lipgloss.Width(marked[:a]) != lipgloss.Width(plain[:b]) {
+		t.Fatalf("icon columns differ:\n%q\n%q", marked, plain)
+	}
+	if lipgloss.Width(marked) != lipgloss.Width(plain) {
+		t.Fatalf("row widths differ:\n%q\n%q", marked, plain)
+	}
+}
+
+func TestListFoldedRowShowsMarkDot(t *testing.T) {
+	m := newListModel(t)
+	// Fold the Needs my review section and the acme/api group of My PRs.
+	sendKeys(m, "z", "a", "]", "j", "z", "a")
+	got := rowText(m)
+	if got[0] != "▸ Needs my review (2)" || got[2] != "▸ acme/api (1)" {
+		t.Fatalf("folded rows with no marks:\n%s", strings.Join(got, "\n"))
+	}
+
+	// R1 is in Needs my review. M2 is in the acme/api group of My PRs. M3
+	// is in the open me/tool group, so it gives no dot.
+	m.list.marks = map[string]markSet{"R1": {Activity: true}, "M2": {New: true}, "M3": {Commits: true}}
+	got = rowText(m)
+	if got[0] != "▸ Needs my review (2) •" || got[2] != "▸ acme/api (1) •" {
+		t.Fatalf("folded rows with marks:\n%s", strings.Join(got, "\n"))
+	}
+	if got[1] != "▾ My PRs (3)" || got[3] != "▾ me/tool (2)" {
+		t.Fatalf("open rows show a dot:\n%s", strings.Join(got, "\n"))
+	}
+
+	// A mark on a PR of another group does not give a dot.
+	m.list.marks = map[string]markSet{"M3": {Commits: true}}
+	if got := rowText(m); got[2] != "▸ acme/api (1)" {
+		t.Fatalf("folded group row = %q, want no dot", got[2])
 	}
 }

@@ -474,12 +474,18 @@ func (l *listPane) renderRow(r listRow, width int, st Styles) string {
 			count = fmt.Sprintf("(%d of %d)", r.shown, r.loaded)
 		}
 		line = st.Title.Render(arrow+" "+r.title) + " " + st.Muted.Render(count)
+		if l.folded[r.key] && l.hiddenMark(r, "") {
+			line += " " + st.Message.Render("•")
+		}
 	case rowGroup:
 		arrow := "▾"
 		if l.folded[r.key] {
 			arrow = "▸"
 		}
 		line = "  " + arrow + " " + r.title + " " + st.Muted.Render(fmt.Sprintf("(%d)", r.shown))
+		if l.folded[r.key] && l.hiddenMark(r, r.title) {
+			line += " " + st.Message.Render("•")
+		}
 	case rowFooter:
 		line = st.Muted.Render(fmt.Sprintf("  … %d more  [m] load more", r.more))
 	default:
@@ -488,7 +494,7 @@ func (l *listPane) renderRow(r listRow, width int, st Styles) string {
 	return ansi.Truncate(line, width, "…")
 }
 
-// renderPR renders a PR row: the open mark, the stack connector, the
+// renderPR renders a PR row: the mark field, the open mark, the stack connector, the
 // status icon in its color, the number, the stack position, the title, the
 // author, and the age. The group row above shows the repository. The title
 // is cut to fit.
@@ -503,7 +509,7 @@ func (l *listPane) renderPR(r listRow, width int, st Styles) string {
 	if r.stackLine != "" {
 		line = st.Muted.Render(r.stackLine)
 	}
-	left := "  " + open + line + " " + icon + " " + st.Status[r.status].Render(ref) + " "
+	left := l.markField(r.pr.ID, st) + open + line + " " + icon + " " + st.Status[r.status].Render(ref) + " "
 	if s := r.pr.Stack; s.InStack() {
 		left += st.Muted.Render(fmt.Sprintf("[%d/%d]", s.Position, s.Size)) + " "
 	}
@@ -518,6 +524,44 @@ func (l *listPane) renderPR(r listRow, width int, st Styles) string {
 		return ansi.Truncate(left+" "+right, width, "…")
 	}
 	return left + strings.Repeat(" ", gap) + right
+}
+
+// markField returns the four mark columns of a PR row: New, Activity,
+// Commits, and State. A column is a colored dot or a space.
+func (l *listPane) markField(id string, st Styles) string {
+	mk := l.marks[id]
+	dot := func(on bool, s lipgloss.Style) string {
+		if on {
+			return s.Render("•")
+		}
+		return " "
+	}
+	state := " "
+	switch mk.State {
+	case stateGood:
+		state = st.MarkGood.Render("•")
+	case stateBad:
+		state = st.MarkBad.Render("•")
+	}
+	return dot(mk.New, st.MarkNew) + dot(mk.Activity, st.MarkActivity) + dot(mk.Commits, st.MarkCommits) + state
+}
+
+// hiddenMark reports whether a PR that the folded row r hides has a mark.
+// The PRs are the PRs of the section that the filters keep. A non-empty
+// repo limits them to one repository group.
+func (l *listPane) hiddenMark(r listRow, repo string) bool {
+	if len(l.marks) == 0 {
+		return false
+	}
+	for _, pr := range l.visiblePRs(l.snapshot.Sections[r.section]) {
+		if repo != "" && pr.Repo.FullName() != repo {
+			continue
+		}
+		if _, ok := l.marks[pr.ID]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // age returns a short age: minutes below one hour, hours below two days,
