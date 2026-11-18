@@ -128,11 +128,11 @@
 - Create: `internal/tui/marks.go`
 - Create: `internal/tui/marks_test.go`
 
-- [ ] add `markSet`, `markState`, `merge`, and `diffMarks` in `internal/tui/marks.go` with the rules of the table in Technical Details
-- [ ] write table tests for each rule: new PR, PR that entered the loaded pages, each count up, count up by me, new head SHA, empty head SHA, CI and review changes, red wins over green
-- [ ] write tests for `merge`: flags accumulate, the newest state color wins, an empty state keeps the old color
-- [ ] write a test: a nil `prev` gives no marks
-- [ ] run `make test`: it must pass before Task 4
+- [x] add `markSet`, `markState`, `merge`, and `diffMarks` in `internal/tui/marks.go` with the rules of the table in Technical Details
+- [x] write table tests for each rule: new PR, PR that entered the loaded pages, each count up, count up by me, new head SHA, empty head SHA, CI and review changes, red wins over green
+- [x] write tests for `merge`: flags accumulate, the newest state color wins, an empty state keeps the old color
+- [x] write a test: a nil `prev` gives no marks
+- [x] run `make test`: it must pass before Task 4
 
 ### Task 4: Keep the marks in the list and clear them
 
