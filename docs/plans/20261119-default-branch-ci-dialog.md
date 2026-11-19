@@ -144,12 +144,12 @@
 - Modify: `internal/commands/commands.go`
 - Modify: `internal/commands/commands_test.go`
 
-- [ ] move the overlay script wrap (the PATH prefix, the exit code line, and the wait for enter) of `Run` into one helper
-- [ ] add `(*Runner).Overlay(ctx, title, script string) error`. It returns `ErrNoAgterm` without a session, and the fail text on a non-zero exit.
-- [ ] write tests: `Overlay` sends the expected `agtermctl session overlay open --block --target ... --cwd <home>` arguments, and the script holds the PATH prefix and the wait
-- [ ] write tests for the error cases: `ErrNoAgterm` without a session, and a non-zero exit
-- [ ] check that the current `Run` overlay tests pass unchanged
-- [ ] run `make test` and `make lint`. They must pass before task 3.
+- [x] move the overlay script wrap (the PATH prefix, the exit code line, and the wait for enter) of `Run` into one helper
+- [x] add `(*Runner).Overlay(ctx, title, script string) error`. It returns `ErrNoAgterm` without a session, and the fail text on a non-zero exit.
+- [x] write tests: `Overlay` sends the expected `agtermctl session overlay open --block --target ... --cwd <home>` arguments, and the script holds the PATH prefix and the wait
+- [x] write tests for the error cases: `ErrNoAgterm` without a session, and a non-zero exit
+- [x] check that the current `Run` overlay tests pass unchanged
+- [x] run `make test` and `make lint`. They must pass before task 3.
 
 ### Task 3: Add the CI dialog: load and view
 

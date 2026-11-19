@@ -61,36 +61,62 @@ func (r *Runner) Run(ctx context.Context, cmd config.Command, pr model.PR) (stri
 	}
 	script := "cd " + execx.ShellQuote(dir) + " && " + rendered
 
-	var name string
-	var args []string
+	name, args := "sh", []string{"-c", script}
 	if cmd.Mode == config.ModeOverlay {
-		// agterm runs the overlay command with the PATH of the agterm app.
-		// The PATH of argus makes gh and git resolve as in the user shell.
-		name = r.Agtermctl
-		if name == "" {
-			name = "agtermctl"
-		}
-		// The overlay closes when its command exits. The script waits for
-		// enter, so that the user can read the output. A newline ends the
-		// template, so a comment at its end does not hide the wait.
-		script = "PATH=" + execx.ShellQuote(os.Getenv("PATH")) + "; export PATH; " + script +
-			"\nrc=$?\nprintf '\\n%s: exit %d. Press enter to close.' " + execx.ShellQuote(cmd.Name) +
-			` "$rc"` + "\nread _\nexit \"$rc\""
-		args = []string{"session", "overlay", "open", "--block",
-			"--target", r.SessionID, "--cwd", dir, script}
-	} else {
-		name = "sh"
-		args = []string{"-c", script}
+		name, args = r.overlayArgs(dir, cmd.Name, script)
 	}
-
-	stdout, stderr, code, err := r.Runner.Run(ctx, name, args...)
-	if err != nil {
-		return "", fmt.Errorf("run %s: %w", name, err)
-	}
-	if code != 0 {
-		return "", errors.New(failText(stdout, stderr, code))
+	if err := r.run(ctx, name, args); err != nil {
+		return "", err
 	}
 	return cmd.Name + ": done", nil
+}
+
+// Overlay runs script in a blocking agterm overlay of the argus session,
+// with the home directory as the work directory. The overlay waits for
+// enter after script exits, and shows title with the exit code. Overlay
+// returns ErrNoAgterm outside agterm, and the fail text on a non-zero exit.
+func (r *Runner) Overlay(ctx context.Context, title, script string) error {
+	if r.SessionID == "" {
+		return ErrNoAgterm
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("overlay %s: %w", title, err)
+	}
+	name, args := r.overlayArgs(home, title, script)
+	return r.run(ctx, name, args)
+}
+
+// overlayArgs returns the agtermctl command that opens a blocking overlay
+// in dir. The overlay runs script with the PATH of argus, then shows title
+// with the exit code and waits for enter.
+func (r *Runner) overlayArgs(dir, title, script string) (string, []string) {
+	// agterm runs the overlay command with the PATH of the agterm app.
+	// The PATH of argus makes gh and git resolve as in the user shell.
+	name := r.Agtermctl
+	if name == "" {
+		name = "agtermctl"
+	}
+	// The overlay closes when its command exits. The script waits for
+	// enter, so that the user can read the output. A newline ends the
+	// script, so a comment at its end does not hide the wait.
+	script = "PATH=" + execx.ShellQuote(os.Getenv("PATH")) + "; export PATH; " + script +
+		"\nrc=$?\nprintf '\\n%s: exit %d. Press enter to close.' " + execx.ShellQuote(title) +
+		` "$rc"` + "\nread _\nexit \"$rc\""
+	return name, []string{"session", "overlay", "open", "--block",
+		"--target", r.SessionID, "--cwd", dir, script}
+}
+
+// run runs the command. It returns the fail text on a non-zero exit.
+func (r *Runner) run(ctx context.Context, name string, args []string) error {
+	stdout, stderr, code, err := r.Runner.Run(ctx, name, args...)
+	if err != nil {
+		return fmt.Errorf("run %s: %w", name, err)
+	}
+	if code != 0 {
+		return errors.New(failText(stdout, stderr, code))
+	}
+	return nil
 }
 
 // branchDir returns the worktree of the clone that has the branch checked

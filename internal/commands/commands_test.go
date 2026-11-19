@@ -196,3 +196,51 @@ func TestRunWorktreeListError(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestOverlay(t *testing.T) {
+	t.Setenv("PATH", "/opt/homebrew/bin:/usr/bin")
+	t.Setenv("HOME", "/Users/me")
+	f := &fakeRunner{}
+	r := &Runner{Runner: f, SessionID: "s1"}
+	if err := r.Overlay(context.Background(), "log #12", "gh run view 99 --repo 'acme/api' --log-failed | less -R"); err != nil {
+		t.Fatalf("Overlay: %v", err)
+	}
+	want := []string{"session", "overlay", "open", "--block", "--target", "s1", "--cwd", "/Users/me",
+		"PATH='/opt/homebrew/bin:/usr/bin'; export PATH; gh run view 99 --repo 'acme/api' --log-failed | less -R\n" +
+			"rc=$?\nprintf '\\n%s: exit %d. Press enter to close.' 'log #12' \"$rc\"\nread _\nexit \"$rc\""}
+	if f.name != "agtermctl" || !reflect.DeepEqual(f.args, want) {
+		t.Errorf("ran %s %q, want agtermctl %q", f.name, f.args, want)
+	}
+	if f.git != nil {
+		t.Errorf("git %q, want no git call", f.git)
+	}
+}
+
+func TestOverlayNoAgterm(t *testing.T) {
+	f := &fakeRunner{}
+	r := &Runner{Runner: f}
+	if err := r.Overlay(context.Background(), "log #12", "true"); !errors.Is(err, ErrNoAgterm) {
+		t.Fatalf("err = %v, want ErrNoAgterm", err)
+	}
+	if f.name != "" {
+		t.Errorf("ran %s, want no command", f.name)
+	}
+}
+
+func TestOverlayExitCode(t *testing.T) {
+	f := &fakeRunner{stderr: "unknown session s1\n", code: 1}
+	r := &Runner{Runner: f, SessionID: "s1"}
+	err := r.Overlay(context.Background(), "log #12", "true")
+	if err == nil || err.Error() != "unknown session s1" {
+		t.Errorf("err = %v, want %q", err, "unknown session s1")
+	}
+}
+
+func TestOverlayStartError(t *testing.T) {
+	f := &fakeRunner{err: errors.New("not found"), code: -1}
+	r := &Runner{Runner: f, SessionID: "s1", Agtermctl: "/bin/agtermctl"}
+	err := r.Overlay(context.Background(), "log #12", "true")
+	if err == nil || err.Error() != "run /bin/agtermctl: not found" {
+		t.Errorf("err = %v, want %q", err, "run /bin/agtermctl: not found")
+	}
+}
