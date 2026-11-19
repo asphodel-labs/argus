@@ -146,6 +146,7 @@ The columns are, in order: New, Activity, Commits, and State.
 If one refresh gives a green and a red state change, the mark is red. A later refresh replaces the state color.
 The marks of a PR add up across refreshes. They stay until the cursor leaves the PR row.
 A folded section or repo group shows one `•` if a hidden PR has a mark.
+The last line of the list pane is a legend of the mark colors. A list pane with less than three lines has no legend.
 A `load more` page adds no marks.
 argus keeps the marks in memory only. Each start of argus begins with no marks.
 

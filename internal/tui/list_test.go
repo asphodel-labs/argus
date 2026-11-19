@@ -515,10 +515,10 @@ func TestListEnterAndSpaceOpenPR(t *testing.T) {
 func TestListScrollKeepsCursorVisible(t *testing.T) {
 	m := newListModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 8})
-	// Pane height 7, list height 5.
+	// Pane height 7, list height 5: 4 row lines and the legend line.
 	sendKeys(m, "G")
-	if m.list.offset != len(m.list.rows)-5 {
-		t.Fatalf("offset = %d, want %d", m.list.offset, len(m.list.rows)-5)
+	if m.list.offset != len(m.list.rows)-4 {
+		t.Fatalf("offset = %d, want %d", m.list.offset, len(m.list.rows)-4)
 	}
 	view := ansi.Strip(m.list.view(40, m.styles, true))
 	if !strings.Contains(view, "›    ●  ⏳ #1 Dotfiles") {
@@ -809,5 +809,29 @@ func TestListFoldedRowShowsMarkDot(t *testing.T) {
 	m.list.marks = map[string]markSet{"M3": {Commits: true}}
 	if got := rowText(m); got[2] != "▸ acme/api (1)" {
 		t.Fatalf("folded group row = %q, want no dot", got[2])
+	}
+}
+
+func TestListMarkLegend(t *testing.T) {
+	m := newListModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
+	lines := strings.Split(ansi.Strip(m.list.view(80, m.styles, true)), "\n")
+	if len(lines) != m.list.height {
+		t.Fatalf("view has %d lines, want the pane height %d", len(lines), m.list.height)
+	}
+	want := "•new •activity •commits •passed/approved •failed/changes"
+	if got := lines[len(lines)-1]; got != want {
+		t.Errorf("last line = %q, want %q", got, want)
+	}
+
+	// A pane of two lines has no room for the legend.
+	m.list.setHeight(2)
+	if v := ansi.Strip(m.list.view(80, m.styles, true)); strings.Contains(v, "•new") {
+		t.Errorf("legend in a two-line pane:\n%s", v)
+	}
+
+	// The legend is cut to the width.
+	if got := ansi.Strip(markLegend(10, m.styles)); lipgloss.Width(got) > 10 || !strings.HasSuffix(got, "…") {
+		t.Errorf("legend at width 10 = %q", got)
 	}
 }

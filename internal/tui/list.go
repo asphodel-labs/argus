@@ -354,8 +354,31 @@ func (l *listPane) scroll() {
 	l.offset = max(min(l.offset, len(l.rows)-h), 0)
 }
 
-// viewHeight is the number of row lines.
-func (l *listPane) viewHeight() int { return l.height }
+// viewHeight is the number of row lines. The last line of a pane with
+// three or more lines holds the mark legend.
+func (l *listPane) viewHeight() int {
+	if l.hasLegend() {
+		return l.height - 1
+	}
+	return l.height
+}
+
+// hasLegend reports whether the pane shows the mark legend on its last
+// line.
+func (l *listPane) hasLegend() bool { return l.height >= 3 }
+
+// markLegend returns the legend of the mark colors, cut to the width.
+func markLegend(width int, st Styles) string {
+	item := func(s lipgloss.Style, label string) string { return s.Render("•") + st.Muted.Render(label) }
+	line := strings.Join([]string{
+		item(st.MarkNew, "new"),
+		item(st.MarkActivity, "activity"),
+		item(st.MarkCommits, "commits"),
+		item(st.MarkGood, "passed/approved"),
+		item(st.MarkBad, "failed/changes"),
+	}, " ")
+	return ansi.Truncate(line, width, "…")
+}
 
 func (l *listPane) setCursor(i int) {
 	if len(l.rows) == 0 {
@@ -457,6 +480,12 @@ func (l *listPane) view(width int, st Styles, focused bool) string {
 	}
 	if len(l.rows) == 0 {
 		lines = append(lines, st.Muted.Render("No pull requests."))
+	}
+	if l.hasLegend() {
+		for len(lines) < h {
+			lines = append(lines, "")
+		}
+		lines = append(lines, markLegend(width, st))
 	}
 	return strings.Join(lines, "\n")
 }
