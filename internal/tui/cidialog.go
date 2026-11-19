@@ -29,6 +29,11 @@ type ciDialog struct {
 	branch string
 	runs   []model.WorkflowRun
 	cursor int
+	// top is the index of the first visible run.
+	top int
+	// height returns the number of content lines that the dialog can
+	// show. If height is nil, the view shows all runs.
+	height func() int
 	// loading is true while a load runs.
 	loading bool
 	// seq is the number of the newest load. A load result with another
@@ -150,14 +155,36 @@ func (d *ciDialog) View(width int) string {
 	if d.branch != "" {
 		title += "@" + d.branch
 	}
-	lines := []string{ansi.Truncate(title, width, "…"), ""}
+	head := []string{ansi.Truncate(title, width, "…"), ""}
 	switch {
 	case d.loading && len(d.runs) == 0:
-		lines = append(lines, "Loading…")
+		head = append(head, "Loading…")
 	case len(d.runs) == 0 && d.err == nil:
-		lines = append(lines, "no runs on "+d.branch)
+		head = append(head, "no runs on "+d.branch)
 	}
-	for i, r := range d.runs {
+	var foot []string
+	if d.err != nil {
+		foot = append(foot, strings.Split(ansi.Wrap("Error: "+firstLine(d.err.Error()), width, ""), "\n")...)
+	}
+	if d.note != "" {
+		foot = append(foot, strings.Split(ansi.Wrap(d.note, width, ""), "\n")...)
+	}
+	switch {
+	case d.sending:
+		foot = append(foot, "Sending…")
+	case d.loading && len(d.runs) > 0:
+		foot = append(foot, "Loading…")
+	}
+	foot = append(foot, ansi.Truncate("[f] failed [F] all [L] log [o] open [ctrl+r] reload [esc] close", width, "…"))
+
+	first, last := 0, len(d.runs)
+	if d.height != nil {
+		// The 1 is the line between the runs and the foot.
+		first, last = d.window(d.height() - len(head) - 1 - len(foot))
+	}
+	lines := head
+	for i := first; i < last; i++ {
+		r := d.runs[i]
 		marker := "  "
 		if i == d.cursor {
 			marker = "› "
@@ -166,21 +193,28 @@ func (d *ciDialog) View(width int) string {
 		text := fmt.Sprintf("#%d %s · %s · %s · %s", r.Number, r.Workflow, r.Title, r.Event, age(d.now().Sub(r.UpdatedAt)))
 		lines = append(lines, ansi.Truncate(marker+s.Render(icon)+" "+text, width, "…"))
 	}
-	lines = append(lines, "")
-	if d.err != nil {
-		lines = append(lines, ansi.Wrap("Error: "+firstLine(d.err.Error()), width, ""))
+	sep := ""
+	if first > 0 || last < len(d.runs) {
+		sep = d.styles.Muted.Render(ansi.Truncate(fmt.Sprintf("runs %d-%d of %d", first+1, last, len(d.runs)), width, "…"))
 	}
-	if d.note != "" {
-		lines = append(lines, ansi.Wrap(d.note, width, ""))
-	}
-	switch {
-	case d.sending:
-		lines = append(lines, "Sending…")
-	case d.loading && len(d.runs) > 0:
-		lines = append(lines, "Loading…")
-	}
-	lines = append(lines, ansi.Truncate("[f] failed [F] all [L] log [o] open [ctrl+r] reload [esc] close", width, "…"))
+	lines = append(lines, sep)
+	lines = append(lines, foot...)
 	return strings.Join(lines, "\n")
+}
+
+// window returns the range of the runs that the view shows in rows lines.
+// The range always holds the cursor and at least one run. window moves
+// d.top only as far as the cursor needs.
+func (d *ciDialog) window(rows int) (first, last int) {
+	rows = max(rows, 1)
+	if len(d.runs) <= rows {
+		d.top = 0
+		return 0, len(d.runs)
+	}
+	d.top = min(d.top, d.cursor)
+	d.top = max(d.top, d.cursor-rows+1)
+	d.top = min(d.top, len(d.runs)-rows)
+	return d.top, d.top + rows
 }
 
 // runIcon returns the icon and the style of a run. It uses the icons and
@@ -198,6 +232,8 @@ func (m *Model) openCIDialog(repo model.Repo) tea.Cmd {
 	}
 	d := newCIDialog(repo, m.list.now, m.styles)
 	d.act, d.reload = m.ciAction, m.loadCI
+	// The dialog border takes two lines of the pane height.
+	d.height = func() int { _, h := m.layout(); return h - 2 }
 	m.dialogs = append(m.dialogs, d)
 	return m.loadCI(d)
 }
@@ -259,8 +295,7 @@ func (m *Model) ciAction(d *ciDialog, key string, run model.WorkflowRun) tea.Cmd
 		}
 		lv := m.logViewer
 		title := fmt.Sprintf("log #%d", run.Number)
-		script := "gh run view " + execx.ShellQuote(fmt.Sprint(run.ID)) + " --repo " +
-			execx.ShellQuote(repo.FullName()) + " --log-failed | less -R"
+		script := ciLogScript(repo, run.ID)
 		return result(title, false, func() error {
 			err := lv.Overlay(ctx, title, script)
 			if errors.Is(err, commands.ErrNoAgterm) {
@@ -283,6 +318,17 @@ func (m *Model) ciAction(d *ciDialog, key string, run model.WorkflowRun) tea.Cmd
 		})
 	}
 	return nil
+}
+
+// ciLogScript returns the sh script that shows the failed log of the run
+// id in less. The script writes the log to a temporary file first, and
+// then shows the file. A pipe from gh to less gives the exit status of
+// less, so a failed gh run gives exit 0. The script exits with the gh
+// status instead. It runs in a subshell, so its exit does not stop the
+// overlay wrapper.
+func ciLogScript(repo model.Repo, id int64) string {
+	return "(f=$(mktemp) || exit; gh run view " + execx.ShellQuote(fmt.Sprint(id)) + " --repo " +
+		execx.ShellQuote(repo.FullName()) + ` --log-failed >"$f" 2>&1; rc=$?; less -R "$f"; rm -f "$f"; exit "$rc")`
 }
 
 // handleCIAction shows the result of a run action. An error shows in the

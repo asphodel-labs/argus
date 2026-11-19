@@ -72,7 +72,7 @@
   - On an error, the error shows in the dialog.
   - On success, the status bar shows "<desc>: done", the dialog stays open, and the runs load again. The new attempt then shows as queued.
 - `L` and `o` send a `ciActionMsg` with `reload` = false. The dialog stays open after the overlay or the browser opens.
-- `L` runs `gh run view <id> --repo owner/name --log-failed | less -R` in the overlay. The run must have a failed conclusion (`failure`, `timed_out`, or `startup_failure`). For other runs, `L` shows "run #N has no failed jobs" in the dialog. Outside agterm, `L` shows "log view requires agterm".
+- `L` runs `gh run view <id> --repo owner/name --log-failed` in the overlay, writes the output to a temporary file, and shows the file in `less -R`. The overlay exit code is the exit code of `gh`, not of `less`. The run must have a failed conclusion (`failure`, `timed_out`, or `startup_failure`). For other runs, `L` shows "run #N has no failed jobs" in the dialog. Outside agterm, `L` shows "log view requires agterm".
 - The dialog does not poll. The user selected "load on open and ctrl+r" in planning.
 
 ## Technical Details
@@ -201,7 +201,7 @@
 - [x] `f`: set `sending` and run `RerunFailedJobs`. If the run has no failed jobs, show "run #N has no failed jobs" and send no request.
 - [x] `F`: set `sending` and run `RerunWorkflow`
 - [x] ignore `f` and `F` while `sending` is true
-- [x] `L`: if the run has failed jobs, call `LogViewer.Overlay` with the title `log #N` and the script `gh run view <id> --repo owner/name --log-failed | less -R`, both shell-quoted. Map `ErrNoAgterm` to "log view requires agterm".
+- [x] `L`: if the run has failed jobs, call `LogViewer.Overlay` with the title `log #N` and the script of `ciLogScript` (`gh run view <id> --repo owner/name --log-failed` into a temporary file, then `less -R`), both shell-quoted. Map `ErrNoAgterm` to "log view requires agterm".
 - [x] `o`: open `run.URL` with `openCommand()` through `m.runner`. `ctrl+r`: load the runs again.
 - [x] add the `LogViewer` interface and the `Options` field, and pass the `commands.Runner` in `cmd/argus`
 - [x] write tests: `f` and `F` call the fake with the repo and the run id, a rerun error stays in the dialog, and after a success the dialog stays open and the runs load again

@@ -267,13 +267,14 @@ On a section row or a `load more` row, `C` shows "move the cursor to a PR or a r
 The dialog title is `CI · owner/name@<branch>`. Each row shows the status, the run number, the workflow, the title, the event, and the age.
 argus drops a run from a fork branch with the same name, so the dialog can show fewer than 20 runs.
 The dialog loads the runs when it opens. It does not refresh them by itself.
+If the runs do not fit in the terminal, the dialog shows the runs around the cursor and the line `runs <first>-<last> of <count>`.
 
 | Key | Action |
 |---|---|
 | `j` / `k`, `↓` / `↑` | Select a run. |
 | `f` | Rerun the failed jobs of the run. |
 | `F` | Rerun all jobs of the run. |
-| `L` | Show the failed log in an agterm overlay with `gh run view <id> --log-failed \| less -R`. |
+| `L` | Show the failed log in an agterm overlay. argus writes the output of `gh run view <id> --log-failed` to a temporary file and shows the file in `less -R`. The overlay shows the exit code of `gh`. |
 | `o` | Open the run in the browser. |
 | `ctrl+r` | Load the runs again. |
 | `esc` | Close the dialog. |

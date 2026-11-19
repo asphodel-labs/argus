@@ -3,6 +3,10 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -15,6 +19,7 @@ import (
 
 	"github.com/asphodel-labs/argus/internal/commands"
 	"github.com/asphodel-labs/argus/internal/config"
+	"github.com/asphodel-labs/argus/internal/execx"
 	"github.com/asphodel-labs/argus/internal/model"
 	"github.com/asphodel-labs/argus/internal/poller"
 )
@@ -465,7 +470,7 @@ func TestCIDialogLog(t *testing.T) {
 	m, f, lv, _ := newCIActionModel(t)
 	d := topCI(t, m)
 	pressDrive(m, "L")
-	wantCalls(t, lv.calls(), "gh run view '1002' --repo 'acme/api' --log-failed | less -R")
+	wantCalls(t, lv.calls(), ciLogScript(ciRepo, 1002))
 	if lv.titles[0] != "log #12" {
 		t.Fatalf("title = %q", lv.titles[0])
 	}
@@ -566,5 +571,160 @@ func TestCIActionForClosedDialog(t *testing.T) {
 	}
 	if got := m.status.Message(); got != "rerun failed jobs of run #12: done" {
 		t.Fatalf("status = %q", got)
+	}
+}
+
+// manyRuns returns n successful runs with the numbers n down to 1.
+func manyRuns(n int) []model.WorkflowRun {
+	runs := make([]model.WorkflowRun, n)
+	for i := range runs {
+		runs[i] = model.WorkflowRun{ID: int64(5000 + n - i), Number: n - i, Workflow: "CI", Title: "Run",
+			Event: "push", Status: "completed", Conclusion: "success", UpdatedAt: listNow.Add(-time.Hour)}
+	}
+	return runs
+}
+
+// ciLines returns the lines of the view of d at width 72.
+func ciLines(d *ciDialog) []string { return strings.Split(ciText(d, 72), "\n") }
+
+func TestCIDialogWindowFollowsCursor(t *testing.T) {
+	d := newCIDialog(ciRepo, fixedNow, Styles{})
+	d.height = func() int { return 10 }
+	d.loaded(ciRunsMsg{branch: "main", runs: manyRuns(20)})
+	for _, step := range []struct {
+		key    string
+		times  int
+		cursor int
+		pos    string
+	}{
+		{"", 0, 0, "runs 1-6 of 20"},
+		{"j", 7, 7, "runs 3-8 of 20"},
+		{"k", 1, 6, "runs 3-8 of 20"},
+		{"k", 5, 1, "runs 2-7 of 20"},
+		{"j", 30, 19, "runs 15-20 of 20"},
+	} {
+		for range step.times {
+			d.Update(key(step.key))
+		}
+		lines := ciLines(d)
+		if len(lines) != 10 {
+			t.Fatalf("cursor %d: view has %d lines, want 10:\n%s", d.cursor, len(lines), strings.Join(lines, "\n"))
+		}
+		if d.cursor != step.cursor || lines[len(lines)-2] != step.pos {
+			t.Fatalf("cursor = %d, position = %q, want %d, %q", d.cursor, lines[len(lines)-2], step.cursor, step.pos)
+		}
+		selected := fmt.Sprintf("› ✓ #%d CI", 20-step.cursor)
+		if !strings.Contains(strings.Join(lines, "\n"), selected) {
+			t.Fatalf("view has no %q:\n%s", selected, strings.Join(lines, "\n"))
+		}
+		if !strings.HasPrefix(lines[0], "CI · acme/api@main") || !strings.HasSuffix(lines[len(lines)-1], "[esc] close") {
+			t.Fatalf("title or key line is missing:\n%s", strings.Join(lines, "\n"))
+		}
+	}
+}
+
+func TestCIDialogWindowKeepsErrorAndNote(t *testing.T) {
+	d := newCIDialog(ciRepo, fixedNow, Styles{})
+	d.height = func() int { return 12 }
+	d.loaded(ciRunsMsg{branch: "main", runs: manyRuns(20)})
+	d.err = errors.New(strings.Repeat("rerun failed ", 10))
+	d.note = "run #20 has no failed jobs"
+	d.sending = true
+	d.cursor = 19
+	lines := ciLines(d)
+	text := strings.Join(lines, "\n")
+	if len(lines) != 12 {
+		t.Fatalf("view has %d lines, want 12:\n%s", len(lines), text)
+	}
+	for _, want := range []string{"Error: rerun failed", d.note, "Sending…", "› ✓ #1 CI", "runs 17-20 of 20"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("view has no %q:\n%s", want, text)
+		}
+	}
+	if !strings.HasSuffix(lines[len(lines)-1], "[esc] close") {
+		t.Fatalf("key line is missing:\n%s", text)
+	}
+}
+
+func TestCIDialogWindowShowsOneRunAtLeast(t *testing.T) {
+	d := newCIDialog(ciRepo, fixedNow, Styles{})
+	d.height = func() int { return 2 }
+	d.loaded(ciRunsMsg{branch: "main", runs: manyRuns(5)})
+	d.cursor = 3
+	text := ciText(d, 72)
+	if !strings.Contains(text, "› ✓ #2 CI") || !strings.Contains(text, "runs 4-4 of 5") {
+		t.Fatalf("view:\n%s", text)
+	}
+}
+
+func TestCIDialogWindowShowsAllRunsThatFit(t *testing.T) {
+	d := newCIDialog(ciRepo, fixedNow, Styles{})
+	d.height = func() int { return 30 }
+	d.loaded(ciRunsMsg{branch: "main", runs: manyRuns(20)})
+	d.cursor = 19
+	text := ciText(d, 72)
+	if strings.Contains(text, "runs ") || !strings.Contains(text, "#20 CI") || !strings.Contains(text, "› ✓ #1 CI") {
+		t.Fatalf("view:\n%s", text)
+	}
+}
+
+func TestCIDialogFitsTerminal(t *testing.T) {
+	m, f := newCIModel(t)
+	f.mu.Lock()
+	f.runs = manyRuns(20)
+	f.mu.Unlock()
+	drive(m, m.update(tea.WindowSizeMsg{Width: 100, Height: 24}))
+	drive(m, m.openCIDialog(ciRepo))
+	for range 19 {
+		m.Update(key("j"))
+	}
+	lines := strings.Split(ansi.Strip(m.View().Content), "\n")
+	text := strings.Join(lines, "\n")
+	if len(lines) != 24 {
+		t.Fatalf("view has %d lines, want 24", len(lines))
+	}
+	for _, want := range []string{"CI · acme/api@main", "› ✓ #1 CI", "[esc] close"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("view has no %q:\n%s", want, text)
+		}
+	}
+}
+
+// writeScript writes an executable sh script to dir/name.
+func writeScript(t *testing.T, dir, name, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"+body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCILogScriptExitStatus(t *testing.T) {
+	for _, code := range []int{0, 4} {
+		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			bin, tmp := t.TempDir(), t.TempDir()
+			shown := filepath.Join(t.TempDir(), "shown")
+			writeScript(t, bin, "gh", fmt.Sprintf("echo \"gh $*\"\necho 'log expired' >&2\nexit %d\n", code))
+			writeScript(t, bin, "less", "cat \"$2\" > "+execx.ShellQuote(shown)+"\nexit 0\n")
+			// The overlay wrapper reads $? after the script.
+			cmd := exec.Command("sh", "-c", ciLogScript(ciRepo, 1002)+"\necho \"after $?\"")
+			cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "TMPDIR="+tmp)
+			out, err := cmd.Output()
+			if err != nil {
+				t.Fatalf("sh: %v", err)
+			}
+			if got, want := strings.TrimSpace(string(out)), fmt.Sprintf("after %d", code); got != want {
+				t.Fatalf("output = %q, want %q", got, want)
+			}
+			log, err := os.ReadFile(shown)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := "gh run view 1002 --repo acme/api --log-failed\nlog expired\n"; string(log) != want {
+				t.Fatalf("less shows %q, want %q", log, want)
+			}
+			if left, _ := os.ReadDir(tmp); len(left) != 0 {
+				t.Fatalf("temporary files stay: %v", left)
+			}
+		})
 	}
 }
