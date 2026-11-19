@@ -217,9 +217,9 @@
 - [x] run `make lint`
 
 ### Task 7: [Final] Update documentation
-- [ ] README.md: add `C` to the features list and to the key table, add a short "Default-branch CI" section, and add a note that `C` is a built-in key now
-- [ ] CLAUDE.md: add one line if the implementation finds a new pattern (for example, the dialog result message that carries the dialog pointer)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] README.md: add `C` to the features list and to the key table, add a short "Default-branch CI" section, and add a note that `C` is a built-in key now
+- [x] CLAUDE.md: add one line if the implementation finds a new pattern (for example, the dialog result message that carries the dialog pointer)
+- [x] move this plan to `docs/plans/completed/` (skipped - the harness moves the plan)
 
 ## Post-Completion
 *Items that need manual action or an external system. These items have no checkboxes.*

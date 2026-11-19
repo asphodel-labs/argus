@@ -16,6 +16,7 @@ Hera made him a guardian because some of his eyes were always open. Like him, ar
 - `p` opens a Claude session with `/pr <url>` in a new agterm session.
 - The `:` command line converts a PR to a draft, marks it ready, closes it, and runs your custom commands.
 - `y` copies the PR URL.
+- `C` shows the GitHub Actions runs of the default branch of a repo. See [Default-branch CI](#default-branch-ci).
 - A background poller refreshes the data and sends agterm notifications.
 
 argus uses the local `gh` authentication. It needs no separate token.
@@ -242,6 +243,7 @@ With no PR in the detail pane, the actions show "move the cursor to a PR".
 | `:` | Open the command line. |
 | `p` | Open a Claude `/pr` session. |
 | `v` | Review with revdiff. |
+| `C` | Show the CI runs of the default branch. The repo comes from the list cursor, not from the PR in the detail pane. See [Default-branch CI](#default-branch-ci). |
 
 `y` writes the URL to the clipboard with OSC 52. On macOS, `y` also runs `pbcopy`, because some terminals block OSC 52.
 
@@ -255,6 +257,31 @@ The mouse also works in the panes:
 
 argus captures the mouse, so a plain drag does not select text.
 To select text, hold `shift` while you drag. In iTerm2, hold `option`.
+
+## Default-branch CI
+
+`C` opens a dialog with the last 20 GitHub Actions runs of the default branch (for example, `main` or `master`).
+The repo is the repo of the PR row or the repo group row under the list cursor. A folded group row also works.
+On a section row or a `load more` row, `C` shows "move the cursor to a PR or a repo".
+
+The dialog title is `CI · owner/name@<branch>`. Each row shows the status, the run number, the workflow, the title, the event, and the age.
+argus drops a run from a fork branch with the same name, so the dialog can show fewer than 20 runs.
+The dialog loads the runs when it opens. It does not refresh them by itself.
+
+| Key | Action |
+|---|---|
+| `j` / `k`, `↓` / `↑` | Select a run. |
+| `f` | Rerun the failed jobs of the run. |
+| `F` | Rerun all jobs of the run. |
+| `L` | Show the failed log in an agterm overlay with `gh run view <id> --log-failed \| less -R`. |
+| `o` | Open the run in the browser. |
+| `ctrl+r` | Load the runs again. |
+| `esc` | Close the dialog. |
+
+`f` and `L` need a run with a failed conclusion: `failure`, `timed_out`, or `startup_failure`. For another run, the dialog shows "run #N has no failed jobs".
+After a rerun, the status bar shows `<action>: done`, and the dialog loads the runs again. The new attempt shows as queued.
+A second `f` or `F` while a rerun request runs does nothing.
+An error shows in the dialog, and the runs stay. Outside agterm, `L` shows "log view requires agterm".
 
 ## Command line
 
@@ -281,7 +308,7 @@ The command runs a shell template in the local clone of the PR repository.
 | Key | Default | Meaning |
 |---|---|---|
 | `name` | required | The name for the command line, `:<name>`. It must be unique, must have no space, and must not be `draft`, `ready`, `close`, or `q`. |
-| `key` | empty | An optional key that runs the command. It must not be a built-in key or the key of another command. The help shows the key under the PR actions. |
+| `key` | empty | An optional key that runs the command. It must not be a built-in key or the key of another command. `C` is a built-in key: it opens the [default-branch CI](#default-branch-ci) dialog. The help shows the key under the PR actions. |
 | `mode` | `background` | `background` or `overlay`. |
 | `run` | required | The shell template. |
 
@@ -407,6 +434,7 @@ These checks need real GitHub and agterm. Nobody did them yet.
 - Run `v` on a real PR. Add line, range, removed-line, and file-level annotations. Check the posted review on github.com.
 - Run `v` with a state directory or a worktree path that has a space or a single quote. Check the revdiff arguments in the overlay.
 - Run `p`. Check that Claude starts in the worktree with `/pr <url>` and finds `gh` and `git` with the fish login shell.
+- Press `C` on a repo with a failed run on the default branch. Check the rows, `L`, `f`, and a repo with `master` as the default branch.
 - Keep argus open for one hour. Check the notifications and the rate-limit use.
 
 ## Development

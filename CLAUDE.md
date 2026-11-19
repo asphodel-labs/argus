@@ -27,6 +27,7 @@ See `README.md` for the features and `docs/plans/` for the design.
 - `internal/launch`: the Claude session through `agtermctl session new`.
 - `internal/tui`: the Bubble Tea model, the list and detail panes, the dialogs, and the status bar.
   After each message, `Model.Update` runs `followCursor` and then `syncDetail`. Put a cursor-driven change of the detail pane or the marks there, not in each key handler.
+  `m.action` closes its origin dialog on success. A dialog that stays open after an action (for example `ciDialog`) sends its own result message with the dialog pointer, and `Model.update` drops a result for a dialog that is not on the stack.
 
 ## Runner pattern
 
