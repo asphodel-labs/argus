@@ -160,15 +160,15 @@
 - Modify: `internal/tui/app.go`
 - Modify: `internal/tui/dialogs_test.go` (the fake GitHub)
 
-- [ ] add `DefaultBranch` and `BranchRuns` to the `GitHub` interface and to the test fake
-- [ ] create `ciDialog` (repo, branch, runs, cursor, loading, seq, sending, err, note, now). It implements `Dialog`.
-- [ ] add the load command and the `ciRunsMsg{dialog, seq, branch, runs, err}` message
-- [ ] add `case ciRunsMsg` to `Model.update` in `app.go`. The handler drops a message whose dialog is not on the stack, or whose `seq` is not the current `seq` of the dialog.
-- [ ] render the view: the title line, the loading text, the run rows with the status glyphs, the selected row, the error line, and the key line `[f] failed [F] all [L] log [o] open [ctrl+r] reload [esc] close`
-- [ ] handle `j` / `k` / `down` / `up` and `esc` in the dialog. The cursor stays within the bounds of the list.
-- [ ] write tests: a load fills the rows, a load error shows in the dialog, a result for a closed dialog is dropped, an empty run list shows "no runs on <branch>", and the view truncates to the width
-- [ ] write a test: two loads finish in the wrong order, and the dialog keeps the result of the newer load
-- [ ] run `make test` and `make lint`. They must pass before task 4.
+- [x] add `DefaultBranch` and `BranchRuns` to the `GitHub` interface and to the test fake
+- [x] create `ciDialog` (repo, branch, runs, cursor, loading, seq, sending, err, note, now). It implements `Dialog`.
+- [x] add the load command and the `ciRunsMsg{dialog, seq, branch, runs, err}` message
+- [x] add `case ciRunsMsg` to `Model.update` in `app.go`. The handler drops a message whose dialog is not on the stack, or whose `seq` is not the current `seq` of the dialog.
+- [x] render the view: the title line, the loading text, the run rows with the status glyphs, the selected row, the error line, and the key line `[f] failed [F] all [L] log [o] open [ctrl+r] reload [esc] close`
+- [x] handle `j` / `k` / `down` / `up` and `esc` in the dialog. The cursor stays within the bounds of the list.
+- [x] write tests: a load fills the rows, a load error shows in the dialog, a result for a closed dialog is dropped, an empty run list shows "no runs on <branch>", and the view truncates to the width
+- [x] write a test: two loads finish in the wrong order, and the dialog keeps the result of the newer load
+- [x] run `make test` and `make lint`. They must pass before task 4.
 
 ### Task 4: Open the dialog with `C` from the list cursor
 

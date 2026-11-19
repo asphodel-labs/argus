@@ -38,6 +38,8 @@ type GitHub interface {
 	ConvertToDraft(ctx context.Context, prID string) error
 	MarkReady(ctx context.Context, prID string) error
 	ClosePR(ctx context.Context, prID string) error
+	DefaultBranch(ctx context.Context, repo model.Repo) (string, error)
+	BranchRuns(ctx context.Context, repo model.Repo, branch string, n int) ([]model.WorkflowRun, error)
 }
 
 // MergeMemory keeps the last merge method for each repository.

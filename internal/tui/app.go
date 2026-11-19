@@ -328,6 +328,8 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		return m.handleFinderSearchDone(msg)
 	case userPickerLoadedMsg:
 		return m.handleUserPickerLoaded(msg)
+	case ciRunsMsg:
+		m.handleCIRuns(msg)
 	case authorFilterMsg:
 		m.list.filters.Author = msg.login
 		m.filtersChanged()

@@ -32,6 +32,8 @@ type fakeGitHub struct {
 	found     map[string][]model.Actor
 	suggested []model.Actor
 	gate      chan struct{}
+	branch    string
+	runs      []model.WorkflowRun
 }
 
 func (f *fakeGitHub) record(name string, args ...any) error {
@@ -899,4 +901,18 @@ func (f *fakeGitHub) MarkReady(_ context.Context, prID string) error {
 
 func (f *fakeGitHub) ClosePR(_ context.Context, prID string) error {
 	return f.record("ClosePR", prID)
+}
+
+func (f *fakeGitHub) DefaultBranch(_ context.Context, repo model.Repo) (string, error) {
+	err := f.record("DefaultBranch", repo.FullName())
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.branch, err
+}
+
+func (f *fakeGitHub) BranchRuns(_ context.Context, repo model.Repo, branch string, n int) ([]model.WorkflowRun, error) {
+	err := f.record("BranchRuns", repo.FullName(), branch, n)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.runs), err
 }
