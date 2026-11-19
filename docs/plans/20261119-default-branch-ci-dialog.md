@@ -129,14 +129,14 @@
 - Create: `internal/gh/testdata/repo.json`
 - Create: `internal/gh/testdata/branch_runs.json`
 
-- [ ] add `model.WorkflowRun` and the method `Failed() bool` (conclusion `failure`, `timed_out`, or `startup_failure`)
-- [ ] add `(*Client).DefaultBranch` and `(*Client).BranchRuns` in `internal/gh/rest.go`, with the error text "<op> owner/name: <err>"
-- [ ] in `BranchRuns`, drop a run whose `head_repository.full_name` is not the base repository
-- [ ] write tests: the httptest server checks the paths and the query (`branch`, `per_page`, `exclude_pull_requests`), and the JSON maps to `WorkflowRun`
-- [ ] write a test: the fixture has a fork `pull_request` run on a branch named `main`, and `BranchRuns` drops it. A `schedule` run stays.
-- [ ] write tests for the error cases: HTTP 404 on the repository, HTTP 500 on the runs, and an empty `workflow_runs`
-- [ ] write a table test for `WorkflowRun.Failed`
-- [ ] run `make test` and `make lint`. They must pass before task 2.
+- [x] add `model.WorkflowRun` and the method `Failed() bool` (conclusion `failure`, `timed_out`, or `startup_failure`)
+- [x] add `(*Client).DefaultBranch` and `(*Client).BranchRuns` in `internal/gh/rest.go`, with the error text "<op> owner/name: <err>"
+- [x] in `BranchRuns`, drop a run whose `head_repository.full_name` is not the base repository
+- [x] write tests: the httptest server checks the paths and the query (`branch`, `per_page`, `exclude_pull_requests`), and the JSON maps to `WorkflowRun`
+- [x] write a test: the fixture has a fork `pull_request` run on a branch named `main`, and `BranchRuns` drops it. A `schedule` run stays.
+- [x] write tests for the error cases: HTTP 404 on the repository, HTTP 500 on the runs, and an empty `workflow_runs`
+- [x] write a table test for `WorkflowRun.Failed`
+- [x] run `make test` and `make lint`. They must pass before task 2.
 
 ### Task 2: Add the log overlay to the commands runner
 

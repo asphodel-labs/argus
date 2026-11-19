@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -110,6 +111,113 @@ func TestRerunError(t *testing.T) {
 	}
 	if httpErr.Message != "This workflow run is not rerunnable" {
 		t.Errorf("message = %q", httpErr.Message)
+	}
+}
+
+// restFixture returns a 200 REST reply with the body of testdata/name.
+func restFixture(t *testing.T, name string) restReply {
+	t.Helper()
+	f := fixture(t, name)
+	return restReply{status: f.status, body: f.body}
+}
+
+func TestDefaultBranch(t *testing.T) {
+	c, ft := newRESTTestClient(t, func(*http.Request) restReply {
+		return restFixture(t, "repo.json")
+	})
+	got, err := c.DefaultBranch(context.Background(), model.Repo{Owner: "acme", Name: "api"})
+	if err != nil {
+		t.Fatalf("DefaultBranch: %v", err)
+	}
+	if got != "master" {
+		t.Errorf("branch = %q, want master", got)
+	}
+	reqs := ft.requests()
+	if len(reqs) != 1 || reqs[0].Method != http.MethodGet || reqs[0].URL.Path != "/repos/acme/api" {
+		t.Errorf("requests = %v", reqs)
+	}
+}
+
+func TestDefaultBranchNotFound(t *testing.T) {
+	c, _ := newRESTTestClient(t, func(*http.Request) restReply {
+		return restReply{status: http.StatusNotFound, body: `{"message": "Not Found"}`}
+	})
+	_, err := c.DefaultBranch(context.Background(), model.Repo{Owner: "acme", Name: "gone"})
+	var httpErr *api.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusNotFound {
+		t.Fatalf("err = %v, want HTTP 404", err)
+	}
+	if !strings.HasPrefix(err.Error(), "default branch acme/gone: ") {
+		t.Errorf("err = %q", err)
+	}
+}
+
+func TestBranchRuns(t *testing.T) {
+	c, ft := newRESTTestClient(t, func(*http.Request) restReply {
+		return restFixture(t, "branch_runs.json")
+	})
+	got, err := c.BranchRuns(context.Background(), model.Repo{Owner: "acme", Name: "api"}, "master", 20)
+	if err != nil {
+		t.Fatalf("BranchRuns: %v", err)
+	}
+	reqs := ft.requests()
+	if len(reqs) != 1 {
+		t.Fatalf("requests = %d, want 1", len(reqs))
+	}
+	r := reqs[0]
+	if r.Method != http.MethodGet || r.URL.Path != "/repos/acme/api/actions/runs" {
+		t.Errorf("request = %s %s", r.Method, r.URL)
+	}
+	q := r.URL.Query()
+	if q.Get("branch") != "master" || q.Get("per_page") != "20" || q.Get("exclude_pull_requests") != "true" {
+		t.Errorf("query = %v", q)
+	}
+	// The fork pull_request run 30433650 is dropped. The schedule run stays.
+	want := []model.WorkflowRun{
+		{
+			ID: 30433642, Number: 562, Attempt: 2, Workflow: "CI", Title: "Fix the retry loop",
+			Event: "push", Status: "completed", Conclusion: "failure",
+			HeadSHA:   "acb5820ced9479c074f688cc328bf03f341a511d",
+			UpdatedAt: time.Date(2026, 11, 19, 10, 15, 0, 0, time.UTC),
+			URL:       "https://github.com/acme/api/actions/runs/30433642",
+		},
+		{
+			ID: 30433700, Number: 88, Attempt: 1, Workflow: "Nightly", Title: "Nightly",
+			Event: "schedule", Status: "queued", Conclusion: "",
+			HeadSHA:   "acb5820ced9479c074f688cc328bf03f341a511d",
+			UpdatedAt: time.Date(2026, 11, 19, 3, 0, 0, 0, time.UTC),
+			URL:       "https://github.com/acme/api/actions/runs/30433700",
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("runs =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+func TestBranchRunsEmpty(t *testing.T) {
+	c, _ := newRESTTestClient(t, func(*http.Request) restReply {
+		return restReply{status: http.StatusOK, body: `{"total_count": 0, "workflow_runs": []}`}
+	})
+	got, err := c.BranchRuns(context.Background(), model.Repo{Owner: "acme", Name: "api"}, "main", 20)
+	if err != nil {
+		t.Fatalf("BranchRuns: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("runs = %+v, want none", got)
+	}
+}
+
+func TestBranchRunsServerError(t *testing.T) {
+	c, _ := newRESTTestClient(t, func(*http.Request) restReply {
+		return restReply{status: http.StatusInternalServerError, body: `{"message": "Server Error"}`}
+	})
+	_, err := c.BranchRuns(context.Background(), model.Repo{Owner: "acme", Name: "api"}, "main", 20)
+	var httpErr *api.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("err = %v, want HTTP 500", err)
+	}
+	if !strings.HasPrefix(err.Error(), "branch runs acme/api: ") {
+		t.Errorf("err = %q", err)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +35,74 @@ func (c *Client) rerun(ctx context.Context, repo model.Repo, runID int64, action
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
 	return resp.Body.Close()
+}
+
+// DefaultBranch returns the default branch name of repo.
+func (c *Client) DefaultBranch(ctx context.Context, repo model.Repo) (string, error) {
+	path := fmt.Sprintf("repos/%s/%s", repo.Owner, repo.Name)
+	var out struct {
+		DefaultBranch string `json:"default_branch"`
+	}
+	if err := c.rest.DoWithContext(ctx, http.MethodGet, path, nil, &out); err != nil {
+		return "", fmt.Errorf("default branch %s: %w", repo.FullName(), err)
+	}
+	return out.DefaultBranch, nil
+}
+
+type workflowRunJSON struct {
+	ID             int64     `json:"id"`
+	RunNumber      int       `json:"run_number"`
+	RunAttempt     int       `json:"run_attempt"`
+	Name           string    `json:"name"`
+	DisplayTitle   string    `json:"display_title"`
+	Event          string    `json:"event"`
+	Status         string    `json:"status"`
+	Conclusion     string    `json:"conclusion"`
+	HeadSHA        string    `json:"head_sha"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	HTMLURL        string    `json:"html_url"`
+	HeadRepository struct {
+		FullName string `json:"full_name"`
+	} `json:"head_repository"`
+}
+
+// BranchRuns returns the last n GitHub Actions runs of branch in repo,
+// newest first. The branch filter of GitHub matches the head branch name,
+// so a fork PR from a branch with the same name matches too. BranchRuns
+// drops a run whose head repository is not repo. Thus the result can hold
+// fewer than n runs.
+func (c *Client) BranchRuns(ctx context.Context, repo model.Repo, branch string, n int) ([]model.WorkflowRun, error) {
+	q := url.Values{}
+	q.Set("branch", branch)
+	q.Set("per_page", strconv.Itoa(n))
+	q.Set("exclude_pull_requests", "true")
+	path := fmt.Sprintf("repos/%s/%s/actions/runs?%s", repo.Owner, repo.Name, q.Encode())
+	var out struct {
+		WorkflowRuns []workflowRunJSON `json:"workflow_runs"`
+	}
+	if err := c.rest.DoWithContext(ctx, http.MethodGet, path, nil, &out); err != nil {
+		return nil, fmt.Errorf("branch runs %s: %w", repo.FullName(), err)
+	}
+	var runs []model.WorkflowRun
+	for _, r := range out.WorkflowRuns {
+		if !strings.EqualFold(r.HeadRepository.FullName, repo.FullName()) {
+			continue
+		}
+		runs = append(runs, model.WorkflowRun{
+			ID:         r.ID,
+			Number:     r.RunNumber,
+			Attempt:    r.RunAttempt,
+			Workflow:   r.Name,
+			Title:      r.DisplayTitle,
+			Event:      r.Event,
+			Status:     r.Status,
+			Conclusion: r.Conclusion,
+			HeadSHA:    r.HeadSHA,
+			UpdatedAt:  r.UpdatedAt,
+			URL:        r.HTMLURL,
+		})
+	}
+	return runs, nil
 }
 
 // DefaultPollInterval is the poll interval when GitHub sends no

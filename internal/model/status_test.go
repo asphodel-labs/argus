@@ -129,3 +129,27 @@ func TestRepoFullName(t *testing.T) {
 		t.Errorf("FullName = %q", got)
 	}
 }
+
+func TestWorkflowRunFailed(t *testing.T) {
+	tests := []struct {
+		conclusion string
+		want       bool
+	}{
+		{"failure", true},
+		{"timed_out", true},
+		{"startup_failure", true},
+		{"success", false},
+		{"cancelled", false},
+		{"skipped", false},
+		{"neutral", false},
+		{"action_required", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.conclusion, func(t *testing.T) {
+			if got := (WorkflowRun{Conclusion: tt.conclusion}).Failed(); got != tt.want {
+				t.Errorf("Failed() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

@@ -225,3 +225,36 @@ type Reaction struct {
 	Count            int
 	ViewerHasReacted bool
 }
+
+// WorkflowRun is one GitHub Actions run.
+type WorkflowRun struct {
+	ID int64
+	// Number is the run_number of the workflow.
+	Number int
+	// Attempt is the run_attempt. A rerun increments it.
+	Attempt int
+	// Workflow is the workflow name.
+	Workflow string
+	// Title is the display_title.
+	Title string
+	Event string
+	// Status is queued, in_progress, completed, or another REST status.
+	Status string
+	// Conclusion is success, failure, cancelled, or another REST
+	// conclusion. It is empty until the run completes.
+	Conclusion string
+	HeadSHA    string
+	UpdatedAt  time.Time
+	// URL is the html_url of the run.
+	URL string
+}
+
+// Failed reports whether the run has failed jobs: the conclusion is
+// failure, timed_out, or startup_failure.
+func (r WorkflowRun) Failed() bool {
+	switch r.Conclusion {
+	case "failure", "timed_out", "startup_failure":
+		return true
+	}
+	return false
+}

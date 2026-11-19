@@ -1,0 +1,50 @@
+{
+  "total_count": 3,
+  "workflow_runs": [
+    {
+      "id": 30433642,
+      "name": "CI",
+      "display_title": "Fix the retry loop",
+      "run_number": 562,
+      "run_attempt": 2,
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "head_branch": "master",
+      "head_sha": "acb5820ced9479c074f688cc328bf03f341a511d",
+      "updated_at": "2026-11-19T10:15:00Z",
+      "html_url": "https://github.com/acme/api/actions/runs/30433642",
+      "head_repository": {"full_name": "acme/api"}
+    },
+    {
+      "id": 30433650,
+      "name": "CI",
+      "display_title": "Add a feature from a fork",
+      "run_number": 563,
+      "run_attempt": 1,
+      "event": "pull_request",
+      "status": "in_progress",
+      "conclusion": null,
+      "head_branch": "master",
+      "head_sha": "0f1e2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6",
+      "updated_at": "2026-11-19T10:20:00Z",
+      "html_url": "https://github.com/acme/api/actions/runs/30433650",
+      "head_repository": {"full_name": "mallory/api"}
+    },
+    {
+      "id": 30433700,
+      "name": "Nightly",
+      "display_title": "Nightly",
+      "run_number": 88,
+      "run_attempt": 1,
+      "event": "schedule",
+      "status": "queued",
+      "conclusion": null,
+      "head_branch": "master",
+      "head_sha": "acb5820ced9479c074f688cc328bf03f341a511d",
+      "updated_at": "2026-11-19T03:00:00Z",
+      "html_url": "https://github.com/acme/api/actions/runs/30433700",
+      "head_repository": {"full_name": "acme/api"}
+    }
+  ]
+}
