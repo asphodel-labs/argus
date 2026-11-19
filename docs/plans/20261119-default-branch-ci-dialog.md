@@ -210,11 +210,11 @@
 - [x] run `make test` and `make lint`. They must pass before task 6.
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify that `C` opens the runs of the default branch for a PR row and for a repo group row
-- [ ] verify that `f`, `F`, `L`, `o`, `ctrl+r`, and `esc` work as the Solution Overview describes
-- [ ] verify the edge cases: a section row, no runs, a load error, a closed dialog before the load ends, and no agterm
-- [ ] run the full test suite: `make test` and `go test -race ./...`
-- [ ] run `make lint`
+- [x] verify that `C` opens the runs of the default branch for a PR row and for a repo group row
+- [x] verify that `f`, `F`, `L`, `o`, `ctrl+r`, and `esc` work as the Solution Overview describes
+- [x] verify the edge cases: a section row, no runs, a load error, a closed dialog before the load ends, and no agterm
+- [x] run the full test suite: `make test` and `go test -race ./...`
+- [x] run `make lint`
 
 ### Task 7: [Final] Update documentation
 - [ ] README.md: add `C` to the features list and to the key table, add a short "Default-branch CI" section, and add a note that `C` is a built-in key now
