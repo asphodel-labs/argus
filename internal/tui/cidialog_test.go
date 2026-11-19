@@ -8,8 +8,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/exp/teatest/v2"
 
+	"github.com/asphodel-labs/argus/internal/config"
 	"github.com/asphodel-labs/argus/internal/model"
+	"github.com/asphodel-labs/argus/internal/poller"
 )
 
 var ciRepo = model.Repo{Owner: "acme", Name: "api"}
@@ -242,5 +245,100 @@ func TestRunIcon(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("runIcon(%s, %s) = %q, want %q", tc.status, tc.conclusion, got, tc.want)
 		}
+	}
+}
+
+// newCIListModel returns a model with the list snapshot, a fake GitHub,
+// and no opened PR.
+func newCIListModel(t *testing.T) (*Model, *fakeGitHub) {
+	t.Helper()
+	f := &fakeGitHub{branch: "main", runs: ciRuns()}
+	m := mustNew(t, Options{Poller: newFakePoller(), GitHub: f, Styles: testStyles(t), Me: "me", BotLogins: []string{"renovate"}, Now: fixedNow})
+	m.Update(tea.WindowSizeMsg{Width: 160, Height: 60})
+	m.Update(pollerMsg{Snapshot: listSnapshot()})
+	return m, f
+}
+
+// pressDrive sends the key and runs the commands that it gives.
+func pressDrive(m *Model, k string) {
+	_, cmd := m.Update(key(k))
+	drive(m, cmd)
+}
+
+func TestCIKeyOnGroupRowWithoutOpenedPR(t *testing.T) {
+	m, f := newCIListModel(t)
+	// Row 3 is the acme/api group of Needs my review. The cursor moves
+	// there directly, so the detail pane opens no PR on the way.
+	m.list.setCursor(3)
+	if m.detail.hasSel {
+		t.Fatal("a PR is open before the test")
+	}
+	pressDrive(m, "C")
+	d := topCI(t, m)
+	if d.repo.FullName() != "acme/api" || len(d.runs) != 2 {
+		t.Fatalf("dialog repo %q, runs %d", d.repo.FullName(), len(d.runs))
+	}
+	wantCalls(t, f.Calls(), "DefaultBranch acme/api", "BranchRuns acme/api main 20")
+}
+
+func TestCIKeyOnPRRow(t *testing.T) {
+	m, f := newCIListModel(t)
+	// Row 2 is R2 in acme/web.
+	sendKeys(m, "j", "j")
+	pressDrive(m, "C")
+	if d := topCI(t, m); d.repo.FullName() != "acme/web" {
+		t.Fatalf("dialog repo %q", d.repo.FullName())
+	}
+	wantCalls(t, f.Calls(), "DefaultBranch acme/web", "BranchRuns acme/web main 20")
+}
+
+func TestCIKeyOnSectionAndFooterRow(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		cursor int
+	}{{"section", 0}, {"footer", 17}} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, f := newCIListModel(t)
+			m.list.setCursor(tc.cursor)
+			pressDrive(m, "C")
+			if m.Dialogs() != 0 || m.Status().Message() != "move the cursor to a PR or a repo" {
+				t.Fatalf("dialogs = %d, message = %q", m.Dialogs(), m.Status().Message())
+			}
+			if calls := f.Calls(); len(calls) != 0 {
+				t.Fatalf("calls %v", calls)
+			}
+		})
+	}
+}
+
+func TestCIKeyFlow(t *testing.T) {
+	p := newFakePoller()
+	f := &fakeGitHub{branch: "main", runs: ciRuns()}
+	tm := teatest.NewTestModel(t, mustNew(t, Options{
+		Poller: p, GitHub: f, Styles: testStyles(t), Me: "me", BotLogins: []string{"renovate"}, Now: fixedNow,
+	}), teatest.WithInitialTermSize(160, 50))
+	p.ch <- poller.Update{Snapshot: listSnapshot()}
+	waitForText(t, tm, "Fix login")
+	// Row 3 is the acme/api group of Needs my review.
+	for range 3 {
+		tm.Send(key("j"))
+	}
+	tm.Send(key("C"))
+	// The renderer writes the "@main" of the title after the load as a
+	// separate change, so the wait checks the run rows only.
+	waitForText(t, tm, "#12 CI · Fix the parser", "#11 Nightly · Nightly")
+	tm.Send(key("q"))
+	m := finalModel(t, tm)
+	if text := ciText(topCI(t, m), 72); !strings.HasPrefix(text, "CI · acme/api@main\n") {
+		t.Fatalf("dialog view:\n%s", text)
+	}
+	wantCalls(t, f.Calls(), "DefaultBranch acme/api", "BranchRuns acme/api main 20")
+}
+
+func TestCIKeyIsBuiltin(t *testing.T) {
+	_, err := New(Options{Commands: []config.Command{customCommand("ci", "C")}, Styles: testStyles(t)})
+	want := `command ci: key "C" is a built-in key`
+	if err == nil || err.Error() != want {
+		t.Fatalf("err %v, want %q", err, want)
 	}
 }

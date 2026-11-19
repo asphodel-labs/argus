@@ -151,13 +151,22 @@ func prRef(pr model.PR) string {
 // handleActionKey runs the PR action of the key on the opened PR. The
 // detail pane follows the list cursor, so the opened PR is the PR under the
 // cursor, or the last PR when the cursor is on a section, group, or footer
-// row. The pane header shows the ref of that PR. ok is false if the key is
-// not an action key.
+// row. The pane header shows the ref of that PR. The C key uses the
+// repository of the list cursor row instead, so it needs no opened PR. ok
+// is false if the key is not an action key.
 func (m *Model) handleActionKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	s := msg.String()
 	if s == ":" {
 		m.list.pending, m.detail.pending = "", ""
 		return PushDialog(m.newCommandLine()), true
+	}
+	if s == "C" {
+		m.list.pending, m.detail.pending = "", ""
+		repo, found := m.list.cursorRepo()
+		if !found {
+			return m.status.SetMessage("move the cursor to a PR or a repo"), true
+		}
+		return m.openCIDialog(repo), true
 	}
 	if c, found := m.customByKey(s); found {
 		m.list.pending, m.detail.pending = "", ""

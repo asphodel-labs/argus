@@ -44,6 +44,8 @@ type listRow struct {
 
 	// group is the key of the repository group row of a PR row.
 	group string
+	// repo is the repository of a group row.
+	repo model.Repo
 
 	pr     model.PR
 	status model.Status
@@ -103,6 +105,22 @@ func (l *listPane) Selected() (model.PR, bool) {
 		return model.PR{}, false
 	}
 	return l.rows[l.cursor].pr, true
+}
+
+// cursorRepo returns the repository of the cursor row: the repository of
+// a PR row, or of a repository group row. It is false on a section row or
+// a footer row.
+func (l *listPane) cursorRepo() (model.Repo, bool) {
+	if l.cursor < 0 || l.cursor >= len(l.rows) {
+		return model.Repo{}, false
+	}
+	switch r := l.rows[l.cursor]; r.kind {
+	case rowPR:
+		return r.pr.Repo, true
+	case rowGroup:
+		return r.repo, true
+	}
+	return model.Repo{}, false
 }
 
 // findPR returns the newest summary of the PR with the ID from the
@@ -324,6 +342,7 @@ func (l *listPane) buildRows() []listRow {
 			gk := groupKey(key, g.repo)
 			rows = append(rows, listRow{
 				kind: rowGroup, key: gk, section: si, scope: sec.Scope, title: g.repo, shown: len(g.prs),
+				repo: g.prs[0].Repo,
 			})
 			if l.folded[gk] {
 				continue

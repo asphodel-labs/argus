@@ -179,15 +179,15 @@
 - Modify: `internal/tui/list_test.go`
 - Modify: `internal/tui/cidialog_test.go`
 
-- [ ] add a `repo model.Repo` field to the group `listRow`, set in `buildRows`
-- [ ] add `listPane.cursorRepo() (model.Repo, bool)`: a PR row gives `pr.Repo`, and a repo group row gives its `repo` field
-- [ ] add the `C` binding ("CI of default branch") to `Actions` in `keys.go`. The help and the custom key check pick it up.
-- [ ] handle `C` in `handleActionKey` before the fixed key set and the `hasSel` check: push a `ciDialog` and start the load. On a section or footer row, show "move the cursor to a PR or a repo".
-- [ ] write tests for `cursorRepo` on a PR row, an open group row, a folded group row, a section row, and a footer row
-- [ ] write a test: `C` works when no PR was opened before
-- [ ] write a teatest flow: `C` on a group row opens the dialog with the runs of that repo
-- [ ] write a test: a custom command with key `C` is now rejected as a built-in key
-- [ ] run `make test` and `make lint`. They must pass before task 5.
+- [x] add a `repo model.Repo` field to the group `listRow`, set in `buildRows`
+- [x] add `listPane.cursorRepo() (model.Repo, bool)`: a PR row gives `pr.Repo`, and a repo group row gives its `repo` field
+- [x] add the `C` binding ("CI of default branch") to `Actions` in `keys.go`. The help and the custom key check pick it up.
+- [x] handle `C` in `handleActionKey` before the fixed key set and the `hasSel` check: push a `ciDialog` and start the load. On a section or footer row, show "move the cursor to a PR or a repo".
+- [x] write tests for `cursorRepo` on a PR row, an open group row, a folded group row, a section row, and a footer row
+- [x] write a test: `C` works when no PR was opened before
+- [x] write a teatest flow: `C` on a group row opens the dialog with the runs of that repo
+- [x] write a test: a custom command with key `C` is now rejected as a built-in key
+- [x] run `make test` and `make lint`. They must pass before task 5.
 
 ### Task 5: Add the run actions: rerun, log, open, and reload
 

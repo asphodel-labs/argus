@@ -91,6 +91,7 @@ func DefaultKeyMap() KeyMap {
 			{Keys: []string{":"}, Desc: "command line"},
 			{Keys: []string{"p"}, Desc: "Claude /pr session"},
 			{Keys: []string{"v"}, Desc: "review with revdiff"},
+			{Keys: []string{"C"}, Desc: "CI of default branch"},
 		},
 	}
 }

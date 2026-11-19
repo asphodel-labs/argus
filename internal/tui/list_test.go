@@ -855,3 +855,30 @@ func TestListCursorRowHasSelectionBackground(t *testing.T) {
 		}
 	}
 }
+
+func TestListCursorRepo(t *testing.T) {
+	m := newListModel(t)
+	// Fold the acme/web group of Needs my review: row 1.
+	sendKeys(m, "j", "z", "a")
+	for _, tc := range []struct {
+		name   string
+		cursor int
+		want   string
+		ok     bool
+	}{
+		{"section row", 0, "", false},
+		{"folded group row", 1, "acme/web", true},
+		{"open group row", 2, "acme/api", true},
+		{"PR row", 3, "acme/api", true},
+		{"footer row", 16, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m.list.setCursor(tc.cursor)
+			repo, ok := m.list.cursorRepo()
+			if ok != tc.ok || (ok && repo.FullName() != tc.want) {
+				t.Fatalf("cursor %d (%q): repo %q %v, want %q %v",
+					tc.cursor, rowText(m)[tc.cursor], repo.FullName(), ok, tc.want, tc.ok)
+			}
+		})
+	}
+}
