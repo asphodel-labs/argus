@@ -112,6 +112,9 @@ type Options struct {
 	// Commander runs the custom commands. Without it a custom command
 	// shows a message.
 	Commander Commander
+	// LogViewer opens the failed log of a run for the L key of the CI
+	// dialog. Without it the L key shows a message.
+	LogViewer LogViewer
 	// OpenCommand is the command that opens a URL. It is "open" on macOS
 	// and "xdg-open" on other systems when empty.
 	OpenCommand string
@@ -142,6 +145,7 @@ type Model struct {
 	launcher  Launcher
 	commands  []config.Command
 	commander Commander
+	logViewer LogViewer
 	openCmd   string
 	// pbcopy is true on macOS. Then the y key also runs pbcopy.
 	pbcopy bool
@@ -201,6 +205,7 @@ func New(opts Options) (*Model, error) {
 		launcher:  opts.Launcher,
 		commands:  opts.Commands,
 		commander: opts.Commander,
+		logViewer: opts.LogViewer,
 		openCmd:   openCmd,
 		pbcopy:    runtime.GOOS == "darwin",
 		poller:    opts.Poller,
@@ -330,6 +335,8 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		return m.handleUserPickerLoaded(msg)
 	case ciRunsMsg:
 		m.handleCIRuns(msg)
+	case ciActionMsg:
+		return m.handleCIAction(msg)
 	case authorFilterMsg:
 		m.list.filters.Author = msg.login
 		m.filtersChanged()

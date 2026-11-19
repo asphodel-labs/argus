@@ -197,17 +197,17 @@
 - Modify: `internal/tui/app.go` (the `ciActionMsg` case and the `Options.LogViewer` field)
 - Modify: `cmd/argus/main.go`
 
-- [ ] add `ciActionMsg{dialog, desc, err, reload}` and its `case` in `Model.update`. The handler clears `sending`, shows an error in the dialog, or shows "<desc>: done" in the status bar. When `reload` is true, it starts a new load. It never closes the dialog.
-- [ ] `f`: set `sending` and run `RerunFailedJobs`. If the run has no failed jobs, show "run #N has no failed jobs" and send no request.
-- [ ] `F`: set `sending` and run `RerunWorkflow`
-- [ ] ignore `f` and `F` while `sending` is true
-- [ ] `L`: if the run has failed jobs, call `LogViewer.Overlay` with the title `log #N` and the script `gh run view <id> --repo owner/name --log-failed | less -R`, both shell-quoted. Map `ErrNoAgterm` to "log view requires agterm".
-- [ ] `o`: open `run.URL` with `openCommand()` through `m.runner`. `ctrl+r`: load the runs again.
-- [ ] add the `LogViewer` interface and the `Options` field, and pass the `commands.Runner` in `cmd/argus`
-- [ ] write tests: `f` and `F` call the fake with the repo and the run id, a rerun error stays in the dialog, and after a success the dialog stays open and the runs load again
-- [ ] write a test: `f` two times before the result gives one call
-- [ ] write tests: `L` sends the expected script, `L` on a successful run sends nothing, `L` without agterm shows the message, `o` runs the open command with the URL, and the dialog stays open after `L` and `o`
-- [ ] run `make test` and `make lint`. They must pass before task 6.
+- [x] add `ciActionMsg{dialog, desc, err, reload}` and its `case` in `Model.update`. The handler clears `sending`, shows an error in the dialog, or shows "<desc>: done" in the status bar. When `reload` is true, it starts a new load. It never closes the dialog.
+- [x] `f`: set `sending` and run `RerunFailedJobs`. If the run has no failed jobs, show "run #N has no failed jobs" and send no request.
+- [x] `F`: set `sending` and run `RerunWorkflow`
+- [x] ignore `f` and `F` while `sending` is true
+- [x] `L`: if the run has failed jobs, call `LogViewer.Overlay` with the title `log #N` and the script `gh run view <id> --repo owner/name --log-failed | less -R`, both shell-quoted. Map `ErrNoAgterm` to "log view requires agterm".
+- [x] `o`: open `run.URL` with `openCommand()` through `m.runner`. `ctrl+r`: load the runs again.
+- [x] add the `LogViewer` interface and the `Options` field, and pass the `commands.Runner` in `cmd/argus`
+- [x] write tests: `f` and `F` call the fake with the repo and the run id, a rerun error stays in the dialog, and after a success the dialog stays open and the runs load again
+- [x] write a test: `f` two times before the result gives one call
+- [x] write tests: `L` sends the expected script, `L` on a successful run sends nothing, `L` without agterm shows the message, `o` runs the open command with the URL, and the dialog stays open after `L` and `o`
+- [x] run `make test` and `make lint`. They must pass before task 6.
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify that `C` opens the runs of the default branch for a PR row and for a repo group row

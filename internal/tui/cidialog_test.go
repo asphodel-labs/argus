@@ -1,8 +1,11 @@
 package tui
 
 import (
+	"context"
 	"errors"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
+	"github.com/asphodel-labs/argus/internal/commands"
 	"github.com/asphodel-labs/argus/internal/config"
 	"github.com/asphodel-labs/argus/internal/model"
 	"github.com/asphodel-labs/argus/internal/poller"
@@ -340,5 +344,227 @@ func TestCIKeyIsBuiltin(t *testing.T) {
 	want := `command ci: key "C" is a built-in key`
 	if err == nil || err.Error() != want {
 		t.Fatalf("err %v, want %q", err, want)
+	}
+}
+
+// fakeLogViewer records the Overlay calls.
+type fakeLogViewer struct {
+	mu      sync.Mutex
+	titles  []string
+	scripts []string
+	err     error
+}
+
+func (f *fakeLogViewer) Overlay(_ context.Context, title, script string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.titles = append(f.titles, title)
+	f.scripts = append(f.scripts, script)
+	return f.err
+}
+
+func (f *fakeLogViewer) calls() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.scripts)
+}
+
+// newCIActionModel returns a model with an open and loaded CI dialog of
+// ciRepo, a fake log viewer, and a fake runner.
+func newCIActionModel(t *testing.T) (*Model, *fakeGitHub, *fakeLogViewer, *fakeRunner) {
+	t.Helper()
+	f := &fakeGitHub{branch: "main", runs: ciRuns()}
+	lv, r := &fakeLogViewer{}, &fakeRunner{}
+	m := mustNew(t, Options{GitHub: f, LogViewer: lv, Runner: r, OpenCommand: "open",
+		Styles: testStyles(t), Me: "me", Now: fixedNow})
+	drive(m, m.update(tea.WindowSizeMsg{Width: 160, Height: 60}))
+	drive(m, m.openCIDialog(ciRepo))
+	f.mu.Lock()
+	f.calls = nil
+	f.mu.Unlock()
+	return m, f, lv, r
+}
+
+func TestCIDialogRerun(t *testing.T) {
+	tests := []struct {
+		key, call, status string
+	}{
+		{"f", "RerunFailedJobs acme/api 1002", "rerun failed jobs of run #12: done"},
+		{"F", "RerunWorkflow acme/api 1002", "rerun run #12: done"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			m, f, _, _ := newCIActionModel(t)
+			d := topCI(t, m)
+			pressDrive(m, tt.key)
+			wantCalls(t, f.Calls(), tt.call, "BranchRuns acme/api main 20")
+			if topCI(t, m) != d {
+				t.Fatal("the dialog closed after the rerun")
+			}
+			if d.sending || d.loading || d.err != nil {
+				t.Fatalf("dialog: sending=%v loading=%v err=%v", d.sending, d.loading, d.err)
+			}
+			if got := m.status.Message(); got != tt.status {
+				t.Fatalf("status = %q, want %q", got, tt.status)
+			}
+		})
+	}
+}
+
+func TestCIDialogRerunAllOnSuccessfulRun(t *testing.T) {
+	m, f, _, _ := newCIActionModel(t)
+	pressDrive(m, "j")
+	pressDrive(m, "F")
+	wantCalls(t, f.Calls(), "RerunWorkflow acme/api 1001", "BranchRuns acme/api main 20")
+}
+
+func TestCIDialogRerunFailedOnSuccessfulRun(t *testing.T) {
+	m, f, _, _ := newCIActionModel(t)
+	pressDrive(m, "j")
+	pressDrive(m, "f")
+	wantCalls(t, f.Calls())
+	d := topCI(t, m)
+	if d.sending {
+		t.Fatal("the dialog is sending")
+	}
+	if text := ciText(d, 72); !strings.Contains(text, "run #11 has no failed jobs") {
+		t.Fatalf("view has no note:\n%s", text)
+	}
+}
+
+func TestCIDialogRerunError(t *testing.T) {
+	m, f, _, _ := newCIActionModel(t)
+	f.setErr("RerunFailedJobs", errors.New("403 forbidden"))
+	d := topCI(t, m)
+	pressDrive(m, "f")
+	wantCalls(t, f.Calls(), "RerunFailedJobs acme/api 1002")
+	if topCI(t, m) != d || d.sending {
+		t.Fatalf("dialog: open=%v sending=%v", topCI(t, m) == d, d.sending)
+	}
+	if text := ciText(d, 72); !strings.Contains(text, "Error: 403 forbidden") || len(d.runs) != 2 {
+		t.Fatalf("view:\n%s", text)
+	}
+}
+
+func TestCIDialogRerunTwiceSendsOnce(t *testing.T) {
+	m, f, _, _ := newCIActionModel(t)
+	_, first := m.Update(key("f"))
+	_, second := m.Update(key("f"))
+	_, third := m.Update(key("F"))
+	if second != nil || third != nil {
+		t.Fatal("a key press while sending gives a command")
+	}
+	if !topCI(t, m).sending {
+		t.Fatal("the dialog is not sending")
+	}
+	drive(m, first)
+	wantCalls(t, f.Calls(), "RerunFailedJobs acme/api 1002", "BranchRuns acme/api main 20")
+}
+
+func TestCIDialogLog(t *testing.T) {
+	m, f, lv, _ := newCIActionModel(t)
+	d := topCI(t, m)
+	pressDrive(m, "L")
+	wantCalls(t, lv.calls(), "gh run view '1002' --repo 'acme/api' --log-failed | less -R")
+	if lv.titles[0] != "log #12" {
+		t.Fatalf("title = %q", lv.titles[0])
+	}
+	wantCalls(t, f.Calls())
+	if topCI(t, m) != d || d.err != nil {
+		t.Fatalf("dialog: open=%v err=%v", topCI(t, m) == d, d.err)
+	}
+}
+
+func TestCIDialogLogOnSuccessfulRun(t *testing.T) {
+	m, _, lv, _ := newCIActionModel(t)
+	pressDrive(m, "j")
+	pressDrive(m, "L")
+	wantCalls(t, lv.calls())
+	if text := ciText(topCI(t, m), 72); !strings.Contains(text, "run #11 has no failed jobs") {
+		t.Fatalf("view has no note:\n%s", text)
+	}
+}
+
+func TestCIDialogLogWithoutAgterm(t *testing.T) {
+	m, _, lv, _ := newCIActionModel(t)
+	lv.err = commands.ErrNoAgterm
+	pressDrive(m, "L")
+	d := topCI(t, m)
+	if text := ciText(d, 72); !strings.Contains(text, "Error: log view requires agterm") {
+		t.Fatalf("view:\n%s", text)
+	}
+}
+
+func TestCIDialogLogWithoutLogViewer(t *testing.T) {
+	m, _ := newCIModel(t)
+	drive(m, m.openCIDialog(ciRepo))
+	pressDrive(m, "L")
+	if text := ciText(topCI(t, m), 72); !strings.Contains(text, "Error: log view is not available") {
+		t.Fatalf("view:\n%s", text)
+	}
+}
+
+func TestCIDialogOpen(t *testing.T) {
+	m, _, _, r := newCIActionModel(t)
+	d := topCI(t, m)
+	pressDrive(m, "j")
+	pressDrive(m, "o")
+	calls := r.Calls()
+	if len(calls) != 1 || !slices.Equal(calls[0], []string{"open", "https://github.com/acme/api/actions/runs/1001"}) {
+		t.Fatalf("runner calls = %q", calls)
+	}
+	if topCI(t, m) != d {
+		t.Fatal("the dialog closed after o")
+	}
+	if got := m.status.Message(); got != "open run #11: done" {
+		t.Fatalf("status = %q", got)
+	}
+}
+
+func TestCIDialogOpenError(t *testing.T) {
+	m, _, _, r := newCIActionModel(t)
+	r.code, r.stderr = 1, "no browser"
+	pressDrive(m, "o")
+	if text := ciText(topCI(t, m), 72); !strings.Contains(text, "Error: open exited with code 1: no browser") {
+		t.Fatalf("view:\n%s", text)
+	}
+}
+
+func TestCIDialogReloadKey(t *testing.T) {
+	m, f, _, _ := newCIActionModel(t)
+	f.mu.Lock()
+	f.runs = f.runs[:1]
+	f.mu.Unlock()
+	pressDrive(m, "ctrl+r")
+	wantCalls(t, f.Calls(), "BranchRuns acme/api main 20")
+	if d := topCI(t, m); len(d.runs) != 1 {
+		t.Fatalf("runs = %d, want 1", len(d.runs))
+	}
+}
+
+func TestCIDialogActionWithoutRuns(t *testing.T) {
+	m, f, lv, r := newCIActionModel(t)
+	topCI(t, m).runs = nil
+	for _, k := range []string{"f", "F", "L", "o"} {
+		pressDrive(m, k)
+	}
+	wantCalls(t, f.Calls())
+	wantCalls(t, lv.calls())
+	if len(r.Calls()) != 0 {
+		t.Fatalf("runner calls = %q", r.Calls())
+	}
+}
+
+func TestCIActionForClosedDialog(t *testing.T) {
+	m, f, _, _ := newCIActionModel(t)
+	_, cmd := m.Update(key("f"))
+	pressDrive(m, "esc")
+	drive(m, cmd)
+	wantCalls(t, f.Calls(), "RerunFailedJobs acme/api 1002")
+	if m.topDialog() != nil {
+		t.Fatalf("top dialog = %T", m.topDialog())
+	}
+	if got := m.status.Message(); got != "rerun failed jobs of run #12: done" {
+		t.Fatalf("status = %q", got)
 	}
 }

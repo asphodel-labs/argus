@@ -107,7 +107,7 @@ func run() error {
 	}
 	m, err := tui.New(tui.Options{Context: ctx, Poller: p, Notifier: notifier, Detail: client, Styles: styles,
 		Search: client, Orgs: cfg.Orgs, GitHub: client, Merges: merges, Runner: execx.Exec{}, Cloner: worktrees, Reviewer: reviewer, Launcher: launcher,
-		Commands: cfg.Commands, Commander: commander,
+		Commands: cfg.Commands, Commander: commander, LogViewer: commander,
 		Me: cfg.User, BotLogins: cfg.BotLogins,
 	})
 	if err != nil {

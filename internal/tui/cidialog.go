@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -10,6 +12,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/asphodel-labs/argus/internal/commands"
+	"github.com/asphodel-labs/argus/internal/execx"
 	"github.com/asphodel-labs/argus/internal/model"
 )
 
@@ -37,6 +41,16 @@ type ciDialog struct {
 	note   string
 	now    func() time.Time
 	styles Styles
+	// act starts the action of key on run: "f", "F", "L", or "o".
+	act func(d *ciDialog, key string, run model.WorkflowRun) tea.Cmd
+	// reload starts a new load of the runs.
+	reload func(d *ciDialog) tea.Cmd
+}
+
+// LogViewer opens a script in a blocking agterm overlay.
+// commands.Runner implements it.
+type LogViewer interface {
+	Overlay(ctx context.Context, title, script string) error
 }
 
 // newCIDialog returns the CI dialog of repo. now gives the time for the
@@ -57,16 +71,55 @@ type ciRunsMsg struct {
 	err    error
 }
 
+// ciActionMsg carries the result of one run action of a CI dialog.
+type ciActionMsg struct {
+	dialog *ciDialog
+	desc   string
+	err    error
+	// reload is true for a rerun. The result then clears the sending flag
+	// and starts a new load.
+	reload bool
+}
+
 func (d *ciDialog) Update(msg tea.KeyPressMsg) (Dialog, tea.Cmd, bool) {
-	switch msg.String() {
+	s := msg.String()
+	switch s {
 	case "j", "down":
 		d.moveCursor(1)
 	case "k", "up":
 		d.moveCursor(-1)
+	case "ctrl+r":
+		d.note = ""
+		return d, d.reload(d), true
+	case "f", "F", "L", "o":
+		return d, d.runAction(s), true
 	default:
 		return d, nil, false
 	}
 	return d, nil, true
+}
+
+// runAction starts the action of key on the selected run. f and F do
+// nothing while a rerun request runs, so a second key press sends no
+// second request. f and L need a run with failed jobs.
+func (d *ciDialog) runAction(key string) tea.Cmd {
+	if len(d.runs) == 0 {
+		return nil
+	}
+	run := d.runs[d.cursor]
+	rerun := key == "f" || key == "F"
+	if rerun && d.sending {
+		return nil
+	}
+	d.note = ""
+	if (key == "f" || key == "L") && !run.Failed() {
+		d.note = fmt.Sprintf("run #%d has no failed jobs", run.Number)
+		return nil
+	}
+	if rerun {
+		d.sending, d.err = true, nil
+	}
+	return d.act(d, key, run)
 }
 
 // moveCursor moves the cursor by delta and keeps it within the runs.
@@ -144,6 +197,7 @@ func (m *Model) openCIDialog(repo model.Repo) tea.Cmd {
 		return m.status.SetMessage("GitHub actions are not available")
 	}
 	d := newCIDialog(repo, m.list.now, m.styles)
+	d.act, d.reload = m.ciAction, m.loadCI
 	m.dialogs = append(m.dialogs, d)
 	return m.loadCI(d)
 }
@@ -177,4 +231,81 @@ func (m *Model) handleCIRuns(msg ciRunsMsg) {
 		return
 	}
 	msg.dialog.loaded(msg)
+}
+
+// ciAction returns the command of the action of key on run. f and F send
+// a rerun request, L opens the failed log in an agterm overlay, and o
+// opens the run in the browser.
+func (m *Model) ciAction(d *ciDialog, key string, run model.WorkflowRun) tea.Cmd {
+	ctx, repo := m.ctx, d.repo
+	result := func(desc string, reload bool, fn func() error) tea.Cmd {
+		return func() tea.Msg {
+			return ciActionMsg{dialog: d, desc: desc, err: fn(), reload: reload}
+		}
+	}
+	switch key {
+	case "f":
+		return result(fmt.Sprintf("rerun failed jobs of run #%d", run.Number), true, func() error {
+			return m.github.RerunFailedJobs(ctx, repo, run.ID)
+		})
+	case "F":
+		return result(fmt.Sprintf("rerun run #%d", run.Number), true, func() error {
+			return m.github.RerunWorkflow(ctx, repo, run.ID)
+		})
+	case "L":
+		if m.logViewer == nil {
+			d.err = errors.New("log view is not available")
+			return nil
+		}
+		lv := m.logViewer
+		title := fmt.Sprintf("log #%d", run.Number)
+		script := "gh run view " + execx.ShellQuote(fmt.Sprint(run.ID)) + " --repo " +
+			execx.ShellQuote(repo.FullName()) + " --log-failed | less -R"
+		return result(title, false, func() error {
+			err := lv.Overlay(ctx, title, script)
+			if errors.Is(err, commands.ErrNoAgterm) {
+				return errors.New("log view requires agterm")
+			}
+			return err
+		})
+	case "o":
+		if run.URL == "" {
+			d.err = errors.New("the run has no URL")
+			return nil
+		}
+		if m.runner == nil {
+			d.err = errors.New("cannot open a browser")
+			return nil
+		}
+		r, name, url := m.runner, m.openCmd, run.URL
+		return result(fmt.Sprintf("open run #%d", run.Number), false, func() error {
+			return runOpen(ctx, r, name, url)
+		})
+	}
+	return nil
+}
+
+// handleCIAction shows the result of a run action. An error shows in the
+// dialog, and also in the status bar if the dialog is not the top dialog
+// or is closed. A success shows in the status bar. The dialog stays open.
+// After a rerun the runs load again.
+func (m *Model) handleCIAction(msg ciActionMsg) tea.Cmd {
+	d := msg.dialog
+	at := slices.Index(m.dialogs, Dialog(d))
+	if msg.reload {
+		d.sending = false
+	}
+	if msg.err != nil {
+		d.err = msg.err
+		if at < 0 || at != len(m.dialogs)-1 {
+			return m.status.SetMessage(msg.desc + " failed: " + firstLine(msg.err.Error()))
+		}
+		return nil
+	}
+	d.err = nil
+	cmds := []tea.Cmd{m.status.SetMessage(msg.desc + ": done")}
+	if msg.reload && at >= 0 {
+		cmds = append(cmds, m.loadCI(d))
+	}
+	return tea.Batch(cmds...)
 }
