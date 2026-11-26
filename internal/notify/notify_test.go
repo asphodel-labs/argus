@@ -9,7 +9,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/asphodel-labs/argus/internal/config"
 	"github.com/asphodel-labs/argus/internal/model"
 	"github.com/asphodel-labs/argus/internal/poller"
 )
@@ -280,5 +282,38 @@ func TestLoadSeenMissing(t *testing.T) {
 	seen, found, err := LoadSeen(filepath.Join(t.TempDir(), SeenFile))
 	if err != nil || found || seen != nil {
 		t.Errorf("seen = %v, found = %v, err = %v", seen, found, err)
+	}
+}
+
+func TestProcessQuietHours(t *testing.T) {
+	path := filepath.Join(t.TempDir(), SeenFile)
+	if err := SaveSeen(path, poller.SeenFrom(snapshot(model.CheckPending, 0, ""))); err != nil {
+		t.Fatal(err)
+	}
+	clock := time.Date(2026, 11, 27, 23, 0, 0, 0, time.Local)
+	r := &fakeRunner{}
+	n := &Notifier{
+		Runner: r, Getenv: env("s"), SeenPath: path, Me: "me",
+		Quiet: config.QuietHours{Start: 22 * 60, End: 8 * 60},
+		Now:   func() time.Time { return clock },
+	}
+	if err := n.Process(context.Background(), snapshot(model.CheckFailure, 0, "", "r1")); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.calls) != 0 {
+		t.Errorf("calls = %q, want none in the quiet period", r.calls)
+	}
+	// The quiet period records the state, so its events do not come later.
+	seen, _, _ := LoadSeen(path)
+	if !seen["r1"].ReviewRequested || seen["m"].Rollup != model.CheckFailure {
+		t.Errorf("seen = %+v, want r1 and the CI failure recorded", seen)
+	}
+
+	clock = time.Date(2026, 11, 28, 8, 0, 0, 0, time.Local)
+	if err := n.Process(context.Background(), snapshot(model.CheckFailure, 0, "", "r1", "r2")); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.calls) != 1 || r.calls[0][2] != "acme/web#1 r2" {
+		t.Errorf("calls = %q, want only the r2 review request", r.calls)
 	}
 }

@@ -98,6 +98,7 @@ func run() error {
 		Runner:   execx.Exec{},
 		SeenPath: filepath.Join(stateDir, notify.SeenFile),
 		Me:       cfg.User,
+		Quiet:    cfg.QuietHours,
 	}
 	commander := &commands.Runner{
 		Runner:    execx.Exec{},
