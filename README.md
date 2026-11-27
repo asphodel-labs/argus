@@ -79,6 +79,7 @@ min_refresh_gap = "5m"
 repo_root = "~/sources"
 clone_protocol = "ssh"
 bot_logins = ["renovate-bot"]
+quiet_hours = "22:00-08:00"
 
 [repos]
 "acme/api" = "~/work/api"
@@ -105,6 +106,7 @@ run = "gh pr checkout {{.Number}}"
 | `repo_root` | `~/sources` | argus looks for a clone at `<repo_root>/<owner>/<repo>`. |
 | `clone_protocol` | `ssh` | How argus clones a missing repo. `ssh` runs `git clone git@github.com:<owner>/<repo>.git`. `https` runs `gh repo clone`, which uses the `git_protocol` setting of `gh`. |
 | `bot_logins` | empty | Logins that the `b` filter treats as bots. |
+| `quiet_hours` | empty | A daily period with no notifications, as `HH:MM-HH:MM` in local time. See [Notifications](#notifications). |
 | `[repos]` | empty | The clone path for one repo, if it is not under `repo_root`. |
 | `[owners]` | empty | A root directory for all repos of one owner. argus looks for a clone at `<dir>/<repo>`. The owner name ignores case. |
 | `[colors]` | ANSI colors | Color overrides. |
@@ -346,6 +348,11 @@ argus sends an agterm notification for these events:
 
 argus sends at most 5 notifications for each refresh. If there are more events, the fifth notification is one summary line.
 On the first run, argus records the state and sends no notifications.
+
+The `quiet_hours` key sets a daily period with no notifications, for example `"22:00-08:00"`.
+The period starts at the first time and stops at the second time. If the second time is earlier, the period goes past midnight.
+In the quiet period, argus records the state and drops the events. It does not send them after the period.
+The two times must be different.
 
 ## Review flow
 

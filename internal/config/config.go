@@ -58,6 +58,63 @@ type Config struct {
 	Colors map[string]string
 	// Commands holds the custom commands of the [[commands]] tables.
 	Commands []Command
+	// QuietHours is the daily period with no desktop notifications.
+	// The zero value has no quiet period.
+	QuietHours QuietHours
+}
+
+// QuietHours is a daily period in local time. Start and End are minutes
+// after midnight. The period includes Start and excludes End. If End is
+// before Start, the period goes past midnight. Start equal to End means
+// no quiet period.
+type QuietHours struct {
+	Start int
+	End   int
+}
+
+// Contains reports whether the local clock time of t is in the period.
+func (q QuietHours) Contains(t time.Time) bool {
+	if q.Start == q.End {
+		return false
+	}
+	m := t.Hour()*60 + t.Minute()
+	if q.Start < q.End {
+		return m >= q.Start && m < q.End
+	}
+	return m >= q.Start || m < q.End
+}
+
+// parseQuietHours parses "HH:MM-HH:MM". An empty value gives no quiet period.
+func parseQuietHours(value string) (QuietHours, error) {
+	if value == "" {
+		return QuietHours{}, nil
+	}
+	start, end, ok := strings.Cut(value, "-")
+	if !ok {
+		return QuietHours{}, fmt.Errorf("quiet_hours %q must be HH:MM-HH:MM", value)
+	}
+	var q QuietHours
+	var err error
+	if q.Start, err = parseClock(strings.TrimSpace(start)); err != nil {
+		return QuietHours{}, fmt.Errorf("quiet_hours %q: %w", value, err)
+	}
+	if q.End, err = parseClock(strings.TrimSpace(end)); err != nil {
+		return QuietHours{}, fmt.Errorf("quiet_hours %q: %w", value, err)
+	}
+	if q.Start == q.End {
+		return QuietHours{}, fmt.Errorf("quiet_hours %q: start and end are the same", value)
+	}
+	return q, nil
+}
+
+// parseClock parses "HH:MM" in 24-hour time and returns the minutes after
+// midnight.
+func parseClock(s string) (int, error) {
+	t, err := time.Parse("15:04", s)
+	if err != nil {
+		return 0, fmt.Errorf("time %q must be HH:MM", s)
+	}
+	return t.Hour()*60 + t.Minute(), nil
 }
 
 // Modes of a custom command.
@@ -145,6 +202,7 @@ type fileConfig struct {
 	Owners          map[string]string `toml:"owners"`
 	Colors          map[string]string `toml:"colors"`
 	Commands        []fileCommand     `toml:"commands"`
+	QuietHours      string            `toml:"quiet_hours"`
 }
 
 // DefaultPath returns ~/.config/argus/config.toml.
@@ -192,6 +250,9 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	if err := parseDuration("min_refresh_gap", fc.MinRefreshGap, &cfg.MinRefreshGap); err != nil {
+		return nil, err
+	}
+	if cfg.QuietHours, err = parseQuietHours(fc.QuietHours); err != nil {
 		return nil, err
 	}
 	switch fc.CloneProtocol {

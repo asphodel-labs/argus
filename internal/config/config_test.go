@@ -72,6 +72,7 @@ min_refresh_gap = "2m"
 repo_root = "~/work"
 clone_protocol = "https"
 bot_logins = ["renovate-bot"]
+quiet_hours = "22:00-08:30"
 
 [repos]
 "acme/api" = "~/work/api"
@@ -101,8 +102,9 @@ failed = "#ff0000"
 			"acme/api": filepath.Join(home, "work", "api"),
 			"acme/web": "/opt/web",
 		},
-		Owners: map[string]string{"globex": filepath.Join(home, "sources", "globex")},
-		Colors: map[string]string{"approved": "2", "failed": "#ff0000"},
+		Owners:     map[string]string{"globex": filepath.Join(home, "sources", "globex")},
+		Colors:     map[string]string{"approved": "2", "failed": "#ff0000"},
+		QuietHours: QuietHours{Start: 22 * 60, End: 8*60 + 30},
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load =\n%+v\nwant\n%+v", cfg, want)
@@ -123,6 +125,10 @@ func TestLoadErrors(t *testing.T) {
 		{"negative gap", `min_refresh_gap = "-5m"`, "min_refresh_gap \"-5m\" must be positive"},
 		{"zero gap", `min_refresh_gap = "0s"`, "must be positive"},
 		{"bad clone protocol", `clone_protocol = "git"`, `clone_protocol "git" must be "ssh" or "https"`},
+		{"quiet no dash", `quiet_hours = "22:00"`, "must be HH:MM-HH:MM"},
+		{"quiet bad start", `quiet_hours = "25:00-08:00"`, `time "25:00" must be HH:MM`},
+		{"quiet bad end", `quiet_hours = "22:00-8am"`, `time "8am" must be HH:MM`},
+		{"quiet same", `quiet_hours = "08:00-08:00"`, "start and end are the same"},
 		{"bad toml", `orgs = [`, "parse config"},
 		{"wrong type", `orgs = "acme"`, "parse config"},
 	}
@@ -364,6 +370,35 @@ func TestResolveUser(t *testing.T) {
 			}
 			if cfg.User != "" {
 				t.Errorf("User = %q, want empty", cfg.User)
+			}
+		})
+	}
+}
+
+func TestQuietHoursContains(t *testing.T) {
+	at := func(h, m int) time.Time { return time.Date(2026, 11, 27, h, m, 0, 0, time.Local) }
+	night := QuietHours{Start: 22 * 60, End: 8 * 60}
+	day := QuietHours{Start: 12 * 60, End: 13 * 60}
+	tests := []struct {
+		name string
+		q    QuietHours
+		t    time.Time
+		want bool
+	}{
+		{"zero value", QuietHours{}, at(3, 0), false},
+		{"night before start", night, at(21, 59), false},
+		{"night at start", night, at(22, 0), true},
+		{"night after midnight", night, at(0, 30), true},
+		{"night before end", night, at(7, 59), true},
+		{"night at end", night, at(8, 0), false},
+		{"day before start", day, at(11, 59), false},
+		{"day at start", day, at(12, 0), true},
+		{"day at end", day, at(13, 0), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.q.Contains(tt.t); got != tt.want {
+				t.Errorf("Contains(%s) = %v, want %v", tt.t.Format("15:04"), got, tt.want)
 			}
 		})
 	}

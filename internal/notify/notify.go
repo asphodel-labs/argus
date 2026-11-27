@@ -11,7 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/asphodel-labs/argus/internal/config"
 	"github.com/asphodel-labs/argus/internal/execx"
 	"github.com/asphodel-labs/argus/internal/model"
 	"github.com/asphodel-labs/argus/internal/poller"
@@ -37,13 +39,19 @@ type Notifier struct {
 	SeenPath string
 	// Me is the login of the user.
 	Me string
+	// Quiet is the daily period with no notifications. Process drops the
+	// events of a refresh in this period.
+	Quiet config.QuietHours
+	// Now gives the current time. It is time.Now when nil.
+	Now func() time.Time
 
 	seen   poller.Seen
 	loaded bool
 }
 
 // Process diffs snap against the seen state, writes the new seen state, and
-// sends the events. On the first run with no seen.json, Process only
+// sends the events. In the quiet period, Process records the state and
+// drops the events. On the first run with no seen.json, Process only
 // records the state and sends no notifications.
 func (n *Notifier) Process(ctx context.Context, snap *poller.Snapshot) error {
 	next := poller.SeenFrom(snap)
@@ -64,6 +72,13 @@ func (n *Notifier) Process(ctx context.Context, snap *poller.Snapshot) error {
 	n.seen = next
 	if err := SaveSeen(n.SeenPath, next); err != nil {
 		return err
+	}
+	now := n.Now
+	if now == nil {
+		now = time.Now
+	}
+	if n.Quiet.Contains(now()) {
+		return nil
 	}
 	getenv := n.Getenv
 	if getenv == nil {
