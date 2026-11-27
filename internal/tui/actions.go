@@ -64,7 +64,8 @@ type actionDoneMsg struct {
 	// note is extra text for the success message.
 	note string
 	err  error
-	// refresh asks for a new detail of the PR after a success.
+	// refresh asks for a new detail of the PR and a full list refresh
+	// after a success.
 	refresh bool
 }
 
@@ -108,6 +109,9 @@ func (m *Model) handleActionDone(msg actionDoneMsg) tea.Cmd {
 	cmds := []tea.Cmd{m.status.SetMessage(msg.desc + ": done" + msg.note)}
 	if msg.refresh {
 		cmds = append(cmds, m.refreshDetail(msg.prID))
+		if m.poller != nil {
+			m.poller.RefreshNow()
+		}
 	}
 	return tea.Batch(cmds...)
 }
@@ -121,8 +125,8 @@ func (m *Model) topDialog() Dialog {
 }
 
 // refreshDetail drops the cached detail of the PR and loads it again if
-// the PR is selected. The list summary updates with the next poller
-// refresh.
+// the PR is selected. The list summary updates with the poller refresh
+// that handleActionDone requests.
 func (m *Model) refreshDetail(id string) tea.Cmd {
 	d := &m.detail
 	delete(d.cache, id)

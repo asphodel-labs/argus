@@ -271,7 +271,7 @@ A command other than `:q` acts on the PR in the detail pane. The PR detail must 
 | `:<name>` | Run the custom command with this name. |
 
 An unknown name shows "unknown command: <name>".
-The status bar shows the result of the command. After a success, the PR detail loads again.
+The status bar shows the result of the command. After a success, the PR detail loads again, and argus starts a full refresh of the list.
 
 ## Custom commands
 

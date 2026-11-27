@@ -161,7 +161,7 @@ func (m *Model) loadedDetail() (model.PR, tea.Cmd, bool) {
 		return model.PR{}, m.status.SetMessage("GitHub actions are not available"), false
 	}
 	// The checks read the detail and not m.detail.sel: sel changes only
-	// with the next poll snapshot, and a refresh loads only the detail.
+	// with the next poll snapshot, and the detail can load before it.
 	detail, loaded := m.detail.cache[m.detail.sel.ID]
 	if !loaded {
 		return model.PR{}, m.status.SetMessage("the PR detail is not loaded yet"), false

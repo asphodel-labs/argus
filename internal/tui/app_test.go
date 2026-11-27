@@ -421,3 +421,26 @@ func mustNew(t *testing.T, opts Options) *Model {
 	}
 	return m
 }
+
+func TestActionSuccessRequestsRefresh(t *testing.T) {
+	cases := []struct {
+		name    string
+		refresh bool
+		err     error
+		want    int
+	}{
+		{name: "refresh action succeeds", refresh: true, want: 1},
+		{name: "refresh action fails", refresh: true, err: errors.New("boom"), want: 0},
+		{name: "action without refresh", refresh: false, want: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newFakePoller()
+			m := mustNew(t, Options{Poller: p, Styles: testStyles(t)})
+			m.Update(actionDoneMsg{prID: "PR_1", desc: "mark o/r#1 ready", refresh: tc.refresh, err: tc.err})
+			if got := p.refreshCount(); got != tc.want {
+				t.Fatalf("RefreshNow calls = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
