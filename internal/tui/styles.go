@@ -16,16 +16,17 @@ import (
 // Color names for the [colors] table of the config. Each status has one
 // name. The other names color the frame of the TUI.
 const (
-	ColorFailed   = "failed"
-	ColorChanges  = "changes"
-	ColorReply    = "reply"
-	ColorDraft    = "draft"
-	ColorConflict = "conflict"
-	ColorPending  = "pending"
-	ColorApproved = "approved"
-	ColorAccent   = "accent"
-	ColorError    = "error"
-	ColorMuted    = "muted"
+	ColorFailed    = "failed"
+	ColorChanges   = "changes"
+	ColorReply     = "reply"
+	ColorDraft     = "draft"
+	ColorConflict  = "conflict"
+	ColorPending   = "pending"
+	ColorApproved  = "approved"
+	ColorAccent    = "accent"
+	ColorError     = "error"
+	ColorMuted     = "muted"
+	ColorSelection = "selection"
 
 	ColorMarkNew      = "mark_new"
 	ColorMarkActivity = "mark_activity"
@@ -35,16 +36,17 @@ const (
 // defaultColors are the 16 ANSI colors of the status table and the 256
 // colors of the change marks.
 var defaultColors = map[string]string{
-	ColorFailed:   "1",
-	ColorChanges:  "3",
-	ColorReply:    "3",
-	ColorDraft:    "8",
-	ColorConflict: "1",
-	ColorPending:  "4",
-	ColorApproved: "2",
-	ColorAccent:   "6",
-	ColorError:    "1",
-	ColorMuted:    "8",
+	ColorFailed:    "1",
+	ColorChanges:   "3",
+	ColorReply:     "3",
+	ColorDraft:     "8",
+	ColorConflict:  "1",
+	ColorPending:   "4",
+	ColorApproved:  "2",
+	ColorAccent:    "6",
+	ColorError:     "1",
+	ColorMuted:     "8",
+	ColorSelection: "236",
 
 	ColorMarkNew:      "208",
 	ColorMarkActivity: "33",
@@ -65,6 +67,8 @@ type Styles struct {
 	Error             lipgloss.Style
 	Message           lipgloss.Style
 	HelpKey           lipgloss.Style
+	// Selection is the background of the list row under the cursor.
+	Selection lipgloss.Style
 
 	// The styles of the change marks. MarkGood and MarkBad color the
 	// state mark with the approved and the failed colors.
@@ -119,6 +123,7 @@ func NewStyles(overrides map[string]string) (Styles, error) {
 		Error:             fg(ColorError).Bold(true),
 		Message:           fg(ColorAccent),
 		HelpKey:           fg(ColorAccent).Bold(true),
+		Selection:         lipgloss.NewStyle().Background(colors[ColorSelection]),
 		MarkNew:           fg(ColorMarkNew),
 		MarkActivity:      fg(ColorMarkActivity),
 		MarkCommits:       fg(ColorMarkCommits),

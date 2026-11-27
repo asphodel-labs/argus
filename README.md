@@ -115,7 +115,7 @@ run = "gh pr checkout {{.Number}}"
 `refresh_interval` and `min_refresh_gap` use Go duration syntax, for example `90s` or `10m`. The value must be positive.
 A path that starts with `~/` is relative to your home directory.
 
-The color names are `failed`, `changes`, `reply`, `draft`, `conflict`, `pending`, `approved`, `accent`, `error`, `muted`, `mark_new`, `mark_activity`, and `mark_commits`.
+The color names are `failed`, `changes`, `reply`, `draft`, `conflict`, `pending`, `approved`, `accent`, `error`, `muted`, `selection`, `mark_new`, `mark_activity`, and `mark_commits`.
 A color value is an ANSI number from 0 to 255 or `#rrggbb`. argus stops with an error for an unknown name or a bad value.
 
 ## PR status

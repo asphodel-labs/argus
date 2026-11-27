@@ -476,7 +476,11 @@ func (l *listPane) view(width int, st Styles, focused bool) string {
 				marker = st.Title.Render("›")
 			}
 		}
-		lines = append(lines, marker+l.renderRow(l.rows[i], width-1, st))
+		line := marker + l.renderRow(l.rows[i], width-1, st)
+		if i == l.cursor {
+			line = highlight(line, width, st.Selection)
+		}
+		lines = append(lines, line)
 	}
 	if len(l.rows) == 0 {
 		lines = append(lines, st.Muted.Render("No pull requests."))
@@ -488,6 +492,14 @@ func (l *listPane) view(width int, st Styles, focused bool) string {
 		lines = append(lines, markLegend(width, st))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// highlight pads the styled line to the width and gives all of it the
+// background of the style. Each reset in the line sets the background again.
+func highlight(line string, width int, bg lipgloss.Style) string {
+	on, _, _ := strings.Cut(bg.Render(" "), " ")
+	line += strings.Repeat(" ", max(width-lipgloss.Width(line), 0))
+	return on + strings.ReplaceAll(line, ansi.ResetStyle, ansi.ResetStyle+on) + ansi.ResetStyle
 }
 
 func (l *listPane) renderRow(r listRow, width int, st Styles) string {

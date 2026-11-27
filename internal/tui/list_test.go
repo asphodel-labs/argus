@@ -835,3 +835,23 @@ func TestListMarkLegend(t *testing.T) {
 		t.Errorf("legend at width 10 = %q", got)
 	}
 }
+
+func TestListCursorRowHasSelectionBackground(t *testing.T) {
+	m := newListModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	sendKeys(m, "j")
+	on, _, _ := strings.Cut(m.styles.Selection.Render(" "), " ")
+	lines := strings.Split(m.list.view(40, m.styles, true), "\n")
+	row := lines[m.list.cursor-m.list.offset]
+	if !strings.HasPrefix(row, on) || ansi.StringWidth(row) != 40 {
+		t.Fatalf("cursor row %q: want the selection background over 40 columns", row)
+	}
+	if strings.Count(row, ansi.ResetStyle) != strings.Count(row, ansi.ResetStyle+on)+1 {
+		t.Fatalf("cursor row %q: a reset drops the selection background", row)
+	}
+	for i, line := range lines {
+		if i != m.list.cursor-m.list.offset && strings.Contains(line, on) {
+			t.Fatalf("row %d %q has the selection background", i, line)
+		}
+	}
+}
